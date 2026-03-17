@@ -33,8 +33,8 @@ export default function Home() {
     setTargets(data.targets);
   };
 
-  const deleteTarget = async (targetName: string) => {
-    await fetch(`${API_URL}/targets/${targetName}`, {
+  const deleteTarget = async (targetIndex: number) => {
+  await fetch(`${API_URL}/targets/${targetIndex}`, {
       method: "DELETE",
     });
 
@@ -68,7 +68,7 @@ export default function Home() {
                 <span>{t.name}</span>
                 <button
                   className="bg-red-600 text-white px-3 py-1 rounded"
-                  onClick={() => deleteTarget(t.name)}
+                  onClick={() => deleteTarget(i)}
                 >
                   Delete
                 </button>
