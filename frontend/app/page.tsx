@@ -33,6 +33,16 @@ export default function Home() {
     setTargets(data.targets);
   };
 
+  const deleteTarget = async (targetName: string) => {
+    await fetch(`${API_URL}/targets/${targetName}`, {
+      method: "DELETE",
+    });
+
+    const res = await fetch(`${API_URL}/targets`);
+    const data = await res.json();
+    setTargets(data.targets);
+  };
+
   return (
     <main className="min-h-screen p-8">
       <div className="max-w-4xl mx-auto">
@@ -54,7 +64,15 @@ export default function Home() {
           <h2 className="text-xl font-semibold mb-2">Targets</h2>
           <ul>
             {targets.map((t, i) => (
-              <li key={i}>{t.name}</li>
+              <li key={i} className="flex items-center justify-between border-b py-2">
+                <span>{t.name}</span>
+                <button
+                  className="bg-red-600 text-white px-3 py-1 rounded"
+                  onClick={() => deleteTarget(t.name)}
+                >
+                  Delete
+                </button>
+              </li>
             ))}
           </ul>
         </div>
