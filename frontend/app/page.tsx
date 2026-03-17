@@ -304,9 +304,6 @@ export default function Home() {
   async function authFetch(path: string, init: RequestInit = {}) {
     const currentSession = session ?? (await getFrontendSession());
 
-    console.log("authFetch token", currentSession?.backendToken);
-    console.log("authFetch path", `${API_URL}${path}`);
-    console.log("auth header", `Bearer ${currentSession?.backendToken}`);
     if (!currentSession?.backendToken) {
       throw new Error("Not authenticated");
     }
