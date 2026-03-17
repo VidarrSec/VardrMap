@@ -22,3 +22,14 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
+targets = []
+
+@app.get("/targets")
+def get_targets():
+    return {"targets": targets}
+
+@app.post("/targets")
+def add_target(target: dict):
+    targets.append(target)
+    return {"message": "Target added", "target": target}
