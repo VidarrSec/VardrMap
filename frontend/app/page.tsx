@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { signIn, signOut } from "next-auth/react";
 
 type ScopeItem = {
   id: string;
@@ -112,10 +113,85 @@ type Section =
   | "findings"
   | "reports";
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+type AppSession = {
+  user?: {
+    name?: string | null;
+    email?: string | null;
+    image?: string | null;
+    githubId?: string;
+    username?: string;
+  };
+  backendToken?: string;
+};
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+
+const EMPTY_PROGRAM: Program = {
+  id: "",
+  name: "",
+  platform: "",
+  program_url: "",
+  scope_summary: "",
+  severity_guidance: "",
+  safe_harbor_notes: "",
+  scope: {
+    in: [],
+    out: [],
+  },
+  imports: [],
+  recon: [],
+  scans: [],
+  manual_tests: [],
+  findings: [],
+  reports: [],
+};
+
+function normalizeProgram(raw: any): Program {
+  return {
+    id: String(raw?.id ?? ""),
+    name: String(raw?.name ?? ""),
+    platform: String(raw?.platform ?? ""),
+    program_url: String(raw?.program_url ?? ""),
+    scope_summary: String(raw?.scope_summary ?? ""),
+    severity_guidance: String(raw?.severity_guidance ?? ""),
+    safe_harbor_notes: String(raw?.safe_harbor_notes ?? ""),
+    scope: {
+      in: Array.isArray(raw?.scope?.in) ? raw.scope.in : [],
+      out: Array.isArray(raw?.scope?.out) ? raw.scope.out : [],
+    },
+    imports: Array.isArray(raw?.imports) ? raw.imports : [],
+    recon: Array.isArray(raw?.recon) ? raw.recon : [],
+    scans: Array.isArray(raw?.scans) ? raw.scans : [],
+    manual_tests: Array.isArray(raw?.manual_tests) ? raw.manual_tests : [],
+    findings: Array.isArray(raw?.findings) ? raw.findings : [],
+    reports: Array.isArray(raw?.reports) ? raw.reports : [],
+  };
+}
+
+async function getFrontendSession(): Promise<AppSession | null> {
+  try {
+    const res = await fetch("/api/auth/session", {
+      method: "GET",
+      credentials: "include",
+      cache: "no-store",
+    });
+
+    if (!res.ok) return null;
+
+    const session = await res.json();
+    if (!session || Object.keys(session).length === 0) return null;
+    return session;
+  } catch {
+    return null;
+  }
+}
 
 export default function Home() {
+  
+  console.log("VardrMap page version: authfetch-live-check-1");
+  const [session, setSession] = useState<AppSession | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
   const [programs, setPrograms] = useState<Program[]>([]);
   const [selectedProgramId, setSelectedProgramId] = useState<string>("");
   const [activeSection, setActiveSection] = useState<Section>("dashboard");
@@ -183,30 +259,27 @@ export default function Home() {
   );
 
   const workflowCounts = useMemo(() => {
-    if (!selectedProgram) {
-      return {
-        inScope: 0,
-        recon: 0,
-        scans: 0,
-        manual: 0,
-        findings: 0,
-        reports: 0,
-      };
-    }
+    const program = selectedProgram ?? EMPTY_PROGRAM;
 
     return {
-      inScope: selectedProgram.scope.in.length,
-      recon: selectedProgram.recon.length,
-      scans: selectedProgram.scans.length,
-      manual: selectedProgram.manual_tests.length,
-      findings: selectedProgram.findings.length,
-      reports: selectedProgram.reports.length,
+      inScope: program.scope?.in?.length ?? 0,
+      recon: program.recon?.length ?? 0,
+      scans: program.scans?.length ?? 0,
+      manual: program.manual_tests?.length ?? 0,
+      findings: program.findings?.length ?? 0,
+      reports: program.reports?.length ?? 0,
     };
   }, [selectedProgram]);
 
   useEffect(() => {
-    loadPrograms();
+    void bootstrapSession();
   }, []);
+
+  useEffect(() => {
+    if (!authLoading && session?.backendToken) {
+      void loadPrograms();
+    }
+  }, [authLoading, session?.backendToken]);
 
   useEffect(() => {
     if (selectedProgram) {
@@ -221,15 +294,70 @@ export default function Home() {
     }
   }, [selectedProgram]);
 
+  async function bootstrapSession() {
+    setAuthLoading(true);
+    const currentSession = await getFrontendSession();
+    setSession(currentSession);
+    setAuthLoading(false);
+  }
+
+  async function authFetch(path: string, init: RequestInit = {}) {
+    const currentSession = session ?? (await getFrontendSession());
+
+    console.log("authFetch token", currentSession?.backendToken);
+    console.log("authFetch path", `${API_URL}${path}`);
+    console.log("auth header", `Bearer ${currentSession?.backendToken}`);
+    if (!currentSession?.backendToken) {
+      throw new Error("Not authenticated");
+    }
+
+    const headers = new Headers(init.headers || {});
+    headers.set("Authorization", `Bearer ${currentSession.backendToken}`);
+
+    if (!(init.body instanceof FormData) && !headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
+
+    const response = await fetch(`${API_URL}${path}`, {
+      ...init,
+      headers,
+      cache: "no-store",
+    });
+
+    if (response.status === 401) {
+      setMessage("Your session is not authorized. Please sign in again.");
+      throw new Error("Unauthorized");
+    }
+
+    return response;
+  }
+
   async function loadPrograms() {
     try {
-      const res = await fetch(`${API_URL}/programs`);
-      const data = await res.json();
-      setPrograms(data.programs || []);
-      if (!selectedProgramId && data.programs?.length) {
-        setSelectedProgramId(data.programs[0].id);
+      setMessage("");
+      const res = await authFetch("/programs");
+
+      if (!res.ok) {
+        throw new Error(`Failed to load programs: ${res.status}`);
       }
-    } catch {
+
+      const data = await res.json();
+      const normalizedPrograms = Array.isArray(data?.programs)
+        ? data.programs.map(normalizeProgram)
+        : [];
+
+      setPrograms(normalizedPrograms);
+
+      if (!selectedProgramId && normalizedPrograms.length > 0) {
+        setSelectedProgramId(normalizedPrograms[0].id);
+      }
+
+      if (normalizedPrograms.length === 0) {
+        setSelectedProgramId("");
+      }
+    } catch (error) {
+      console.error(error);
+      setPrograms([]);
       setMessage("Failed to load programs.");
     }
   }
@@ -238,12 +366,24 @@ export default function Home() {
     const id = programId || selectedProgramId;
     if (!id) return;
 
-    const res = await fetch(`${API_URL}/programs/${id}`);
-    const data = await res.json();
+    try {
+      const res = await authFetch(`/programs/${id}`);
 
-    setPrograms((prev) =>
-      prev.map((p) => (p.id === id ? data : p))
-    );
+      if (!res.ok) {
+        throw new Error(`Failed to load program: ${res.status}`);
+      }
+
+      const data = normalizeProgram(await res.json());
+
+      setPrograms((prev) => {
+        const exists = prev.some((p) => p.id === id);
+        if (!exists) return [...prev, data];
+        return prev.map((p) => (p.id === id ? data : p));
+      });
+    } catch (error) {
+      console.error(error);
+      setMessage("Failed to refresh selected program.");
+    }
   }
 
   async function createProgram() {
@@ -253,16 +393,20 @@ export default function Home() {
     setMessage("");
 
     try {
-      const res = await fetch(`${API_URL}/programs`, {
+      const res = await authFetch("/programs", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newProgram),
       });
 
-      const created = await res.json();
+      if (!res.ok) {
+        throw new Error(`Failed to create program: ${res.status}`);
+      }
+
+      const created = normalizeProgram(await res.json());
       const updatedPrograms = [...programs, created];
       setPrograms(updatedPrograms);
       setSelectedProgramId(created.id);
+
       setNewProgram({
         name: "",
         platform: "",
@@ -271,8 +415,10 @@ export default function Home() {
         severity_guidance: "",
         safe_harbor_notes: "",
       });
+
       setMessage("Program created.");
-    } catch {
+    } catch (error) {
+      console.error(error);
       setMessage("Failed to create program.");
     } finally {
       setLoading(false);
@@ -286,15 +432,19 @@ export default function Home() {
     setMessage("");
 
     try {
-      await fetch(`${API_URL}/programs/${selectedProgramId}`, {
+      const res = await authFetch(`/programs/${selectedProgramId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(programForm),
       });
 
+      if (!res.ok) {
+        throw new Error(`Failed to save program: ${res.status}`);
+      }
+
       await refreshSelectedProgram();
       setMessage("Program profile saved.");
-    } catch {
+    } catch (error) {
+      console.error(error);
       setMessage("Failed to save program profile.");
     } finally {
       setLoading(false);
@@ -306,15 +456,20 @@ export default function Home() {
     if (!confirm("Delete this program?")) return;
 
     try {
-      await fetch(`${API_URL}/programs/${selectedProgramId}`, {
+      const res = await authFetch(`/programs/${selectedProgramId}`, {
         method: "DELETE",
       });
+
+      if (!res.ok) {
+        throw new Error(`Failed to delete program: ${res.status}`);
+      }
 
       const remaining = programs.filter((p) => p.id !== selectedProgramId);
       setPrograms(remaining);
       setSelectedProgramId(remaining[0]?.id || "");
       setMessage("Program deleted.");
-    } catch {
+    } catch (error) {
+      console.error(error);
       setMessage("Failed to delete program.");
     }
   }
@@ -326,11 +481,14 @@ export default function Home() {
     if (!payload.value.trim()) return;
 
     try {
-      await fetch(`${API_URL}/programs/${selectedProgramId}/scope/${scopeType}`, {
+      const res = await authFetch(`/programs/${selectedProgramId}/scope/${scopeType}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+
+      if (!res.ok) {
+        throw new Error(`Failed to add scope item: ${res.status}`);
+      }
 
       if (scopeType === "in") {
         setScopeIn({ value: "", kind: "domain", notes: "" });
@@ -340,7 +498,8 @@ export default function Home() {
 
       await refreshSelectedProgram();
       setMessage("Scope updated.");
-    } catch {
+    } catch (error) {
+      console.error(error);
       setMessage("Failed to add scope item.");
     }
   }
@@ -349,13 +508,21 @@ export default function Home() {
     if (!selectedProgramId) return;
 
     try {
-      await fetch(`${API_URL}/programs/${selectedProgramId}/scope/${scopeType}/${itemId}`, {
-        method: "DELETE",
-      });
+      const res = await authFetch(
+        `/programs/${selectedProgramId}/scope/${scopeType}/${itemId}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (!res.ok) {
+        throw new Error(`Failed to delete scope item: ${res.status}`);
+      }
 
       await refreshSelectedProgram();
       setMessage("Scope item deleted.");
-    } catch {
+    } catch (error) {
+      console.error(error);
       setMessage("Failed to delete scope item.");
     }
   }
@@ -371,15 +538,20 @@ export default function Home() {
     setMessage("");
 
     try {
-      await fetch(`${API_URL}/programs/${selectedProgramId}/imports`, {
+      const res = await authFetch(`/programs/${selectedProgramId}/imports`, {
         method: "POST",
         body: formData,
       });
 
+      if (!res.ok) {
+        throw new Error(`Failed to import: ${res.status}`);
+      }
+
       setImportFile(null);
       await refreshSelectedProgram();
       setMessage("Import complete.");
-    } catch {
+    } catch (error) {
+      console.error(error);
       setMessage("Import failed.");
     } finally {
       setLoading(false);
@@ -390,11 +562,14 @@ export default function Home() {
     if (!selectedProgramId || !manualTest.title.trim()) return;
 
     try {
-      await fetch(`${API_URL}/programs/${selectedProgramId}/manual-tests`, {
+      const res = await authFetch(`/programs/${selectedProgramId}/manual-tests`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(manualTest),
       });
+
+      if (!res.ok) {
+        throw new Error(`Failed to add manual test: ${res.status}`);
+      }
 
       setManualTest({
         title: "",
@@ -406,7 +581,8 @@ export default function Home() {
 
       await refreshSelectedProgram();
       setMessage("Manual testing note added.");
-    } catch {
+    } catch (error) {
+      console.error(error);
       setMessage("Failed to add manual test.");
     }
   }
@@ -415,13 +591,18 @@ export default function Home() {
     if (!selectedProgramId) return;
 
     try {
-      await fetch(`${API_URL}/programs/${selectedProgramId}/manual-tests/${testId}`, {
+      const res = await authFetch(`/programs/${selectedProgramId}/manual-tests/${testId}`, {
         method: "DELETE",
       });
 
+      if (!res.ok) {
+        throw new Error(`Failed to delete manual test: ${res.status}`);
+      }
+
       await refreshSelectedProgram();
       setMessage("Manual test deleted.");
-    } catch {
+    } catch (error) {
+      console.error(error);
       setMessage("Failed to delete manual test.");
     }
   }
@@ -430,11 +611,14 @@ export default function Home() {
     if (!selectedProgramId || !findingForm.title.trim()) return;
 
     try {
-      await fetch(`${API_URL}/programs/${selectedProgramId}/findings`, {
+      const res = await authFetch(`/programs/${selectedProgramId}/findings`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(findingForm),
       });
+
+      if (!res.ok) {
+        throw new Error(`Failed to add finding: ${res.status}`);
+      }
 
       setFindingForm({
         title: "",
@@ -449,7 +633,8 @@ export default function Home() {
 
       await refreshSelectedProgram();
       setMessage("Finding added.");
-    } catch {
+    } catch (error) {
+      console.error(error);
       setMessage("Failed to add finding.");
     }
   }
@@ -458,13 +643,18 @@ export default function Home() {
     if (!selectedProgramId) return;
 
     try {
-      await fetch(`${API_URL}/programs/${selectedProgramId}/findings/${findingId}`, {
+      const res = await authFetch(`/programs/${selectedProgramId}/findings/${findingId}`, {
         method: "DELETE",
       });
 
+      if (!res.ok) {
+        throw new Error(`Failed to delete finding: ${res.status}`);
+      }
+
       await refreshSelectedProgram();
       setMessage("Finding deleted.");
-    } catch {
+    } catch (error) {
+      console.error(error);
       setMessage("Failed to delete finding.");
     }
   }
@@ -473,11 +663,14 @@ export default function Home() {
     if (!selectedProgramId || !reportForm.title.trim()) return;
 
     try {
-      await fetch(`${API_URL}/programs/${selectedProgramId}/reports`, {
+      const res = await authFetch(`/programs/${selectedProgramId}/reports`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(reportForm),
       });
+
+      if (!res.ok) {
+        throw new Error(`Failed to save report: ${res.status}`);
+      }
 
       setReportForm({
         finding_id: "",
@@ -493,7 +686,8 @@ export default function Home() {
 
       await refreshSelectedProgram();
       setMessage("Report saved.");
-    } catch {
+    } catch (error) {
+      console.error(error);
       setMessage("Failed to save report.");
     }
   }
@@ -502,13 +696,18 @@ export default function Home() {
     if (!selectedProgramId) return;
 
     try {
-      await fetch(`${API_URL}/programs/${selectedProgramId}/reports/${reportId}`, {
+      const res = await authFetch(`/programs/${selectedProgramId}/reports/${reportId}`, {
         method: "DELETE",
       });
 
+      if (!res.ok) {
+        throw new Error(`Failed to delete report: ${res.status}`);
+      }
+
       await refreshSelectedProgram();
       setMessage("Report deleted.");
-    } catch {
+    } catch (error) {
+      console.error(error);
       setMessage("Failed to delete report.");
     }
   }
@@ -569,14 +768,58 @@ ${reportForm.cvss || ""}
     </button>
   );
 
+  if (authLoading) {
+    return (
+      <main className="min-h-screen bg-black text-white">
+        <div className="flex min-h-screen items-center justify-center">
+          <div className="text-zinc-400">Loading session...</div>
+        </div>
+      </main>
+    );
+  }
+
+  if (!session?.backendToken) {
+    return (
+      <main className="min-h-screen bg-black text-white">
+        <div className="flex min-h-screen items-center justify-center p-6">
+          <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-950 p-8 text-center">
+            <h1 className="text-3xl font-bold">VardrMap</h1>
+            <p className="mt-3 text-sm text-zinc-400">
+              Sign in with GitHub to access your private bug bounty workspace.
+            </p>
+            <button
+              onClick={() => signIn("github")}
+              className="mt-6 w-full rounded-md bg-white px-4 py-2 text-sm font-semibold text-black"
+            >
+              Sign in with GitHub
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-black text-white">
       <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[280px_1fr]">
         <aside className="border-r border-zinc-800 p-4">
           <div className="mb-6">
-            <h1 className="text-3xl font-bold">VardrMap</h1>
-            <p className="mt-2 text-sm text-zinc-400">
-              Beginner-friendly bug bounty workflow workspace
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h1 className="text-3xl font-bold">VardrMap</h1>
+                <p className="mt-2 text-sm text-zinc-400">
+                  Beginner-friendly bug bounty workflow workspace
+                </p>
+              </div>
+              <button
+                onClick={() => signOut({ callbackUrl: "/" })}
+                className="rounded-md border border-zinc-700 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-900"
+              >
+                Sign out
+              </button>
+            </div>
+            <p className="mt-3 text-xs text-zinc-500">
+              Signed in as {session.user?.username || session.user?.email || "GitHub user"}
             </p>
           </div>
 
@@ -821,7 +1064,7 @@ ${reportForm.cvss || ""}
                   </div>
 
                   <div className="mt-6 space-y-3">
-                    {selectedProgram.scope.in.map((item) => (
+                    {(selectedProgram.scope?.in ?? []).map((item) => (
                       <ListCard
                         key={item.id}
                         title={item.value}
@@ -858,7 +1101,7 @@ ${reportForm.cvss || ""}
                   </div>
 
                   <div className="mt-6 space-y-3">
-                    {selectedProgram.scope.out.map((item) => (
+                    {(selectedProgram.scope?.out ?? []).map((item) => (
                       <ListCard
                         key={item.id}
                         title={item.value}
@@ -898,7 +1141,7 @@ ${reportForm.cvss || ""}
                     <label className="mb-2 block text-sm font-semibold">JSON / JSONL File</label>
                     <input
                       type="file"
-                      accept=".json,.jsonl,.txt"
+                      accept=".json,.jsonl,application/json,application/x-ndjson"
                       onChange={(e) => setImportFile(e.target.files?.[0] || null)}
                       className="w-full rounded-md border border-zinc-700 bg-zinc-900 p-2 text-sm"
                     />
@@ -946,7 +1189,7 @@ ${reportForm.cvss || ""}
                         </tr>
                       </thead>
                       <tbody>
-                        {selectedProgram.recon.map((item) => (
+                        {(selectedProgram.recon ?? []).map((item) => (
                           <tr key={item.id} className="border-b border-zinc-900">
                             <td className="py-2 pr-4">{item.source}</td>
                             <td className="py-2 pr-4">{item.url || item.host || "—"}</td>
@@ -961,7 +1204,7 @@ ${reportForm.cvss || ""}
 
                 <Panel title="Technology / Metadata">
                   <div className="space-y-3">
-                    {selectedProgram.recon.map((item) => (
+                    {(selectedProgram.recon ?? []).map((item) => (
                       <div
                         key={item.id}
                         className="rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-sm"
@@ -993,10 +1236,10 @@ ${reportForm.cvss || ""}
 
               <Panel title="Nuclei Candidates">
                 <div className="space-y-3">
-                  {selectedProgram.scans.length === 0 ? (
+                  {(selectedProgram.scans ?? []).length === 0 ? (
                     <p className="text-sm text-zinc-400">No scan results imported yet.</p>
                   ) : (
-                    selectedProgram.scans.map((scan) => (
+                    (selectedProgram.scans ?? []).map((scan) => (
                       <div
                         key={scan.id}
                         className="rounded-lg border border-zinc-800 bg-zinc-950 p-4"
@@ -1078,7 +1321,7 @@ ${reportForm.cvss || ""}
 
                 <Panel title="Saved Manual Tests">
                   <div className="space-y-3">
-                    {selectedProgram.manual_tests.map((test) => (
+                    {(selectedProgram.manual_tests ?? []).map((test) => (
                       <div
                         key={test.id}
                         className="rounded-lg border border-zinc-800 bg-zinc-950 p-4"
@@ -1175,7 +1418,7 @@ ${reportForm.cvss || ""}
 
                 <Panel title="Finding Tracker">
                   <div className="space-y-3">
-                    {selectedProgram.findings.map((finding) => (
+                    {(selectedProgram.findings ?? []).map((finding) => (
                       <div
                         key={finding.id}
                         className="rounded-lg border border-zinc-800 bg-zinc-950 p-4"
@@ -1220,7 +1463,7 @@ ${reportForm.cvss || ""}
                         value={reportForm.finding_id}
                         onChange={(e) => {
                           const findingId = e.target.value;
-                          const finding = selectedProgram.findings.find((f) => f.id === findingId);
+                          const finding = (selectedProgram.findings ?? []).find((f) => f.id === findingId);
                           setReportForm({
                             ...reportForm,
                             finding_id: findingId,
@@ -1233,7 +1476,7 @@ ${reportForm.cvss || ""}
                         }}
                       >
                         <option value="">No linked finding</option>
-                        {selectedProgram.findings.map((finding) => (
+                        {(selectedProgram.findings ?? []).map((finding) => (
                           <option key={finding.id} value={finding.id}>
                             {finding.title}
                           </option>
@@ -1293,7 +1536,7 @@ ${reportForm.cvss || ""}
                   </pre>
 
                   <div className="mt-6 space-y-3">
-                    {selectedProgram.reports.map((report) => (
+                    {(selectedProgram.reports ?? []).map((report) => (
                       <div
                         key={report.id}
                         className="rounded-lg border border-zinc-800 bg-zinc-950 p-4"
