@@ -31,5 +31,10 @@ def get_targets():
 
 @app.post("/targets")
 def add_target(target: dict):
-    targets.append(target)
-    return {"message": "Target added", "target": target}
+    new_target = {
+        "name": target.get("name"),
+        "notes": target.get("notes", ""),
+        "status": "new"
+    }
+    targets.append(new_target)
+    return {"message": "Target added", "target": new_target}
