@@ -38,3 +38,10 @@ def add_target(target: dict):
     }
     targets.append(new_target)
     return {"message": "Target added", "target": new_target}
+
+@app.delete("/targets/{target_index}")
+def delete_target(target_index: int):
+    if 0 <= target_index < len(targets):
+        deleted = targets.pop(target_index)
+        return {"message": "Target deleted", "target": deleted}
+    return {"message": "Target not found"}
