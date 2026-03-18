@@ -16,11 +16,29 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from jose import JWTError, jwt
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
+from db import Base, engine, get_db
+from models import (
+    Finding,
+    ImportRecord,
+    ManualTest,
+    Program,
+    ReconItem,
+    Report,
+    ScanItem,
+    ScopeItem,
+)
+
+# -----------------------------------------------------------------------------
+# Create tables on startup
+# -----------------------------------------------------------------------------
+
+Base.metadata.create_all(bind=engine)
 
 
 # -----------------------------------------------------------------------------
-# Environment-driven config only
-# Never hardcode secrets in code.
+# Environment config
 # -----------------------------------------------------------------------------
 
 ENV = os.getenv("ENV") or os.getenv("RAILWAY_ENVIRONMENT_NAME", "development")
@@ -62,14 +80,6 @@ app.add_middleware(
 
 
 # -----------------------------------------------------------------------------
-# Temporary in-memory storage
-# NOTE: This is still temporary and not suitable long-term for a public app.
-# -----------------------------------------------------------------------------
-
-programs: list[dict[str, Any]] = []
-
-
-# -----------------------------------------------------------------------------
 # Enums / strict types
 # -----------------------------------------------------------------------------
 
@@ -82,7 +92,7 @@ ToolType = Literal["ffuf", "httpx", "nuclei"]
 
 
 # -----------------------------------------------------------------------------
-# Models
+# Pydantic schemas
 # -----------------------------------------------------------------------------
 
 class ProgramCreate(BaseModel):
@@ -141,12 +151,132 @@ class ReportCreate(BaseModel):
 
 
 # -----------------------------------------------------------------------------
-# Helpers
+# Serializers — convert ORM rows to the dicts the frontend expects
 # -----------------------------------------------------------------------------
 
-def generate_id() -> str:
-    return str(uuid4())
+def serialize_scope_item(item: ScopeItem) -> dict:
+    return {
+        "id": item.id,
+        "value": item.value,
+        "kind": item.kind,
+        "notes": item.notes or "",
+    }
 
+
+def serialize_manual_test(t: ManualTest) -> dict:
+    return {
+        "id": t.id,
+        "title": t.title,
+        "hypothesis": t.hypothesis or "",
+        "payload": t.payload or "",
+        "evidence": t.evidence or "",
+        "status": t.status,
+    }
+
+
+def serialize_finding(f: Finding) -> dict:
+    return {
+        "id": f.id,
+        "title": f.title,
+        "severity": f.severity,
+        "asset": f.asset or "",
+        "status": f.status,
+        "summary": f.summary or "",
+        "steps": f.steps or "",
+        "impact": f.impact or "",
+        "remediation": f.remediation or "",
+    }
+
+
+def serialize_report(r: Report) -> dict:
+    return {
+        "id": r.id,
+        "finding_id": r.finding_id or "",
+        "title": r.title,
+        "summary": r.summary or "",
+        "steps": r.steps or "",
+        "impact": r.impact or "",
+        "remediation": r.remediation or "",
+        "cwe": r.cwe or "",
+        "cvss": r.cvss or "",
+        "status": r.status,
+    }
+
+
+def serialize_recon_item(item: ReconItem) -> dict:
+    tech_list = [t for t in (item.tech or "").split(",") if t] if item.tech else []
+    return {
+        "id": item.id,
+        "source": item.source or "",
+        "url": item.url or "",
+        "path": item.path or "",
+        "host": item.host or "",
+        "title": item.title or "",
+        "status_code": item.status_code,
+        "webserver": item.webserver or "",
+        "port": item.port or "",
+        "tech": tech_list,
+        "content_type": item.content_type or "",
+        "length": item.length,
+        "words": item.words,
+        "lines": item.lines,
+        "notes": item.notes or "",
+    }
+
+
+def serialize_scan_item(item: ScanItem) -> dict:
+    return {
+        "id": item.id,
+        "source": item.source or "nuclei",
+        "template_id": item.template_id or "",
+        "title": item.title or "",
+        "severity": item.severity or "info",
+        "asset": item.asset or "",
+        "matched_at": item.matched_at or "",
+        "type": item.type or "",
+        "description": item.description or "",
+        "status": item.status or "new",
+        "cwe": item.cwe or "",
+        "cvss": item.cvss or "",
+    }
+
+
+def serialize_import_record(r: ImportRecord) -> dict:
+    return {
+        "id": r.id,
+        "tool_type": r.tool_type or "",
+        "filename": r.filename or "redacted",
+        "imported_count": r.imported_count or 0,
+    }
+
+
+def serialize_program(p: Program) -> dict:
+    """Full nested program object matching the frontend's expected shape."""
+    return {
+        "id": p.id,
+        "owner_github_id": p.owner_github_id,
+        "name": p.name,
+        "platform": p.platform or "",
+        "program_url": p.program_url or "",
+        "scope_summary": p.scope_summary or "",
+        "severity_guidance": p.severity_guidance or "",
+        "safe_harbor_notes": p.safe_harbor_notes or "",
+        "scope": {
+            "in": [serialize_scope_item(i) for i in p.scope_items if i.scope_type == "in"],
+            "out": [serialize_scope_item(i) for i in p.scope_items if i.scope_type == "out"],
+        },
+        "imports": [serialize_import_record(r) for r in p.import_records],
+        "recon": [serialize_recon_item(r) for r in p.recon_items],
+        "scans": [serialize_scan_item(s) for s in p.scan_items],
+        "manual_tests": [serialize_manual_test(t) for t in p.manual_tests],
+        "findings": [serialize_finding(f) for f in p.findings],
+        "reports": [serialize_report(r) for r in p.reports],
+    }
+
+
+# -----------------------------------------------------------------------------
+# Auth helpers
+# -----------------------------------------------------------------------------
 
 def get_current_user(authorization: str | None = Header(default=None)) -> dict[str, str]:
     if not BACKEND_JWT_SECRET:
@@ -179,22 +309,26 @@ def get_current_user(authorization: str | None = Header(default=None)) -> dict[s
     }
 
 
-def get_program_or_404(program_id: str, current_user: dict[str, str]) -> dict[str, Any]:
-    for program in programs:
-        if (
-            program["id"] == program_id
-            and program["owner_github_id"] == current_user["github_id"]
-        ):
-            return program
-    raise HTTPException(status_code=404, detail="Program not found")
+def get_program_or_404(program_id: str, current_user: dict[str, str], db: Session) -> Program:
+    program = (
+        db.query(Program)
+        .filter(Program.id == program_id, Program.owner_github_id == current_user["github_id"])
+        .first()
+    )
+    if not program:
+        raise HTTPException(status_code=404, detail="Program not found")
+    return program
 
+
+# -----------------------------------------------------------------------------
+# Import parsers (unchanged)
+# -----------------------------------------------------------------------------
 
 def parse_json_or_jsonl(raw: bytes) -> Any:
     text = raw.decode("utf-8", errors="replace").strip()
     if not text:
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
 
-    # JSONL
     if "\n" in text:
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         if not lines:
@@ -204,7 +338,6 @@ def parse_json_or_jsonl(raw: bytes) -> Any:
         except json.JSONDecodeError:
             pass
 
-    # JSON
     try:
         return json.loads(text)
     except json.JSONDecodeError as exc:
@@ -213,97 +346,76 @@ def parse_json_or_jsonl(raw: bytes) -> Any:
 
 def normalize_to_list(parsed: Any) -> list[dict[str, Any]]:
     if isinstance(parsed, list):
-        out: list[dict[str, Any]] = []
-        for item in parsed:
-            if isinstance(item, dict):
-                out.append(item)
-        return out
-
+        return [item for item in parsed if isinstance(item, dict)]
     if isinstance(parsed, dict):
         if isinstance(parsed.get("results"), list):
             return [item for item in parsed["results"] if isinstance(item, dict)]
         return [parsed]
-
     raise HTTPException(status_code=400, detail="Unsupported JSON structure")
 
 
-def parse_ffuf(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    recon_items: list[dict[str, Any]] = []
-
+def parse_ffuf(items: list[dict[str, Any]], program_id: str) -> list[ReconItem]:
+    out = []
     for item in items:
-        url = item.get("url") or item.get("input", {}).get("FUZZ")
-        recon_items.append(
-            {
-                "id": generate_id(),
-                "source": "ffuf",
-                "url": url or "",
-                "path": str(item.get("input", {}).get("FUZZ", "")),
-                "status_code": item.get("status"),
-                "length": item.get("length"),
-                "words": item.get("words"),
-                "lines": item.get("lines"),
-                "content_type": item.get("content-type") or item.get("content_type") or "",
-                "notes": "",
-            }
-        )
-
-    return recon_items
+        url = item.get("url") or item.get("input", {}).get("FUZZ") or ""
+        out.append(ReconItem(
+            program_id=program_id,
+            source="ffuf",
+            url=url,
+            path=str(item.get("input", {}).get("FUZZ", "")),
+            status_code=item.get("status"),
+            length=item.get("length"),
+            words=item.get("words"),
+            lines=item.get("lines"),
+            content_type=item.get("content-type") or item.get("content_type") or "",
+        ))
+    return out
 
 
-def parse_httpx(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    recon_items: list[dict[str, Any]] = []
-
+def parse_httpx(items: list[dict[str, Any]], program_id: str) -> list[ReconItem]:
+    out = []
     for item in items:
         tech_value = item.get("tech") or item.get("technologies") or []
         if isinstance(tech_value, list):
-            tech_list = [str(t) for t in tech_value]
+            tech_str = ",".join(str(t) for t in tech_value)
         else:
-            tech_list = [str(tech_value)] if tech_value else []
+            tech_str = str(tech_value) if tech_value else ""
 
-        recon_items.append(
-            {
-                "id": generate_id(),
-                "source": "httpx",
-                "url": item.get("url") or "",
-                "host": item.get("host") or "",
-                "title": item.get("title") or "",
-                "status_code": item.get("status-code") or item.get("status_code"),
-                "webserver": item.get("webserver") or "",
-                "port": item.get("port") or "",
-                "tech": tech_list,
-                "content_type": item.get("content-type") or item.get("content_type") or "",
-                "notes": "",
-            }
-        )
-
-    return recon_items
+        out.append(ReconItem(
+            program_id=program_id,
+            source="httpx",
+            url=item.get("url") or "",
+            host=item.get("host") or "",
+            title=item.get("title") or "",
+            status_code=item.get("status-code") or item.get("status_code"),
+            webserver=item.get("webserver") or "",
+            port=str(item.get("port") or ""),
+            tech=tech_str,
+            content_type=item.get("content-type") or item.get("content_type") or "",
+        ))
+    return out
 
 
-def parse_nuclei(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    scan_items: list[dict[str, Any]] = []
-
+def parse_nuclei(items: list[dict[str, Any]], program_id: str) -> list[ScanItem]:
+    out = []
     for item in items:
         info = item.get("info") if isinstance(item.get("info"), dict) else {}
         classification = info.get("classification") if isinstance(info.get("classification"), dict) else {}
-
-        scan_items.append(
-            {
-                "id": generate_id(),
-                "source": "nuclei",
-                "template_id": item.get("template-id") or item.get("templateID") or "",
-                "title": info.get("name") or item.get("matcher-name") or "Untitled Finding",
-                "severity": info.get("severity") or "info",
-                "asset": item.get("matched-at") or item.get("host") or "",
-                "matched_at": item.get("matched-at") or "",
-                "type": item.get("type") or "",
-                "description": info.get("description") or "",
-                "status": "new",
-                "cwe": classification.get("cwe-id") or "",
-                "cvss": classification.get("cvss-score") or "",
-            }
-        )
-
-    return scan_items
+        out.append(ScanItem(
+            program_id=program_id,
+            source="nuclei",
+            template_id=item.get("template-id") or item.get("templateID") or "",
+            title=info.get("name") or item.get("matcher-name") or "Untitled Finding",
+            severity=info.get("severity") or "info",
+            asset=item.get("matched-at") or item.get("host") or "",
+            matched_at=item.get("matched-at") or "",
+            type=item.get("type") or "",
+            description=info.get("description") or "",
+            status="new",
+            cwe=classification.get("cwe-id") or "",
+            cvss=str(classification.get("cvss-score") or ""),
+        ))
+    return out
 
 
 # -----------------------------------------------------------------------------
@@ -320,10 +432,6 @@ def health_check():
     return {"status": "ok", "environment": ENV}
 
 
-# -----------------------------------------------------------------------------
-# Protected test route
-# -----------------------------------------------------------------------------
-
 @app.get("/me")
 def me(current_user: dict[str, str] = Depends(get_current_user)):
     return current_user
@@ -334,45 +442,43 @@ def me(current_user: dict[str, str] = Depends(get_current_user)):
 # -----------------------------------------------------------------------------
 
 @app.get("/programs")
-def get_programs(current_user: dict[str, str] = Depends(get_current_user)):
-    owned_programs = [
-        p for p in programs if p["owner_github_id"] == current_user["github_id"]
-    ]
-    return {"programs": owned_programs}
+def get_programs(
+    current_user: dict[str, str] = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    rows = db.query(Program).filter(Program.owner_github_id == current_user["github_id"]).all()
+    return {"programs": [serialize_program(p) for p in rows]}
 
 
 @app.post("/programs")
 def create_program(
     payload: ProgramCreate,
     current_user: dict[str, str] = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    program = {
-        "id": generate_id(),
-        "owner_github_id": current_user["github_id"],
-        "name": payload.name,
-        "platform": payload.platform or "",
-        "program_url": payload.program_url or "",
-        "scope_summary": payload.scope_summary or "",
-        "severity_guidance": payload.severity_guidance or "",
-        "safe_harbor_notes": payload.safe_harbor_notes or "",
-        "scope": {"in": [], "out": []},
-        "imports": [],
-        "recon": [],
-        "scans": [],
-        "manual_tests": [],
-        "findings": [],
-        "reports": [],
-    }
-    programs.append(program)
-    return program
+    program = Program(
+        owner_github_id=current_user["github_id"],
+        name=payload.name,
+        platform=payload.platform or "",
+        program_url=payload.program_url or "",
+        scope_summary=payload.scope_summary or "",
+        severity_guidance=payload.severity_guidance or "",
+        safe_harbor_notes=payload.safe_harbor_notes or "",
+    )
+    db.add(program)
+    db.commit()
+    db.refresh(program)
+    return serialize_program(program)
 
 
 @app.get("/programs/{program_id}")
 def get_program(
     program_id: str,
     current_user: dict[str, str] = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    return get_program_or_404(program_id, current_user)
+    program = get_program_or_404(program_id, current_user, db)
+    return serialize_program(program)
 
 
 @app.patch("/programs/{program_id}")
@@ -380,30 +486,25 @@ def update_program(
     program_id: str,
     payload: ProgramUpdate,
     current_user: dict[str, str] = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    program = get_program_or_404(program_id, current_user)
-    updates = payload.model_dump(exclude_unset=True)
-    for key, value in updates.items():
-        program[key] = value
-    return program
+    program = get_program_or_404(program_id, current_user, db)
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        setattr(program, key, value)
+    db.commit()
+    db.refresh(program)
+    return serialize_program(program)
 
 
 @app.delete("/programs/{program_id}")
 def delete_program(
     program_id: str,
     current_user: dict[str, str] = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    global programs
-    before = len(programs)
-    programs = [
-        p for p in programs
-        if not (
-            p["id"] == program_id
-            and p["owner_github_id"] == current_user["github_id"]
-        )
-    ]
-    if len(programs) == before:
-        raise HTTPException(status_code=404, detail="Program not found")
+    program = get_program_or_404(program_id, current_user, db)
+    db.delete(program)
+    db.commit()
     return {"message": "Program deleted"}
 
 
@@ -416,16 +517,20 @@ def add_in_scope_item(
     program_id: str,
     payload: ScopeItemCreate,
     current_user: dict[str, str] = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    program = get_program_or_404(program_id, current_user)
-    item = {
-        "id": generate_id(),
-        "value": payload.value,
-        "kind": payload.kind,
-        "notes": payload.notes or "",
-    }
-    program["scope"]["in"].append(item)
-    return item
+    get_program_or_404(program_id, current_user, db)
+    item = ScopeItem(
+        program_id=program_id,
+        scope_type="in",
+        value=payload.value,
+        kind=payload.kind,
+        notes=payload.notes or "",
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return serialize_scope_item(item)
 
 
 @app.post("/programs/{program_id}/scope/out")
@@ -433,16 +538,20 @@ def add_out_scope_item(
     program_id: str,
     payload: ScopeItemCreate,
     current_user: dict[str, str] = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    program = get_program_or_404(program_id, current_user)
-    item = {
-        "id": generate_id(),
-        "value": payload.value,
-        "kind": payload.kind,
-        "notes": payload.notes or "",
-    }
-    program["scope"]["out"].append(item)
-    return item
+    get_program_or_404(program_id, current_user, db)
+    item = ScopeItem(
+        program_id=program_id,
+        scope_type="out",
+        value=payload.value,
+        kind=payload.kind,
+        notes=payload.notes or "",
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return serialize_scope_item(item)
 
 
 @app.delete("/programs/{program_id}/scope/{scope_type}/{item_id}")
@@ -451,43 +560,45 @@ def delete_scope_item(
     scope_type: str,
     item_id: str,
     current_user: dict[str, str] = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    program = get_program_or_404(program_id, current_user)
-
     if scope_type not in ["in", "out"]:
         raise HTTPException(status_code=400, detail="Invalid scope type")
-
-    before = len(program["scope"][scope_type])
-    program["scope"][scope_type] = [
-        item for item in program["scope"][scope_type] if item["id"] != item_id
-    ]
-
-    if len(program["scope"][scope_type]) == before:
+    get_program_or_404(program_id, current_user, db)
+    item = db.query(ScopeItem).filter(
+        ScopeItem.id == item_id,
+        ScopeItem.program_id == program_id,
+        ScopeItem.scope_type == scope_type,
+    ).first()
+    if not item:
         raise HTTPException(status_code=404, detail="Scope item not found")
-
+    db.delete(item)
+    db.commit()
     return {"message": "Scope item deleted"}
 
 
 # -----------------------------------------------------------------------------
-# Recon / scans
+# Recon / scans (read-only — written via imports)
 # -----------------------------------------------------------------------------
 
 @app.get("/programs/{program_id}/recon")
 def get_recon(
     program_id: str,
     current_user: dict[str, str] = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    program = get_program_or_404(program_id, current_user)
-    return {"recon": program["recon"]}
+    program = get_program_or_404(program_id, current_user, db)
+    return {"recon": [serialize_recon_item(r) for r in program.recon_items]}
 
 
 @app.get("/programs/{program_id}/scans")
 def get_scans(
     program_id: str,
     current_user: dict[str, str] = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    program = get_program_or_404(program_id, current_user)
-    return {"scans": program["scans"]}
+    program = get_program_or_404(program_id, current_user, db)
+    return {"scans": [serialize_scan_item(s) for s in program.scan_items]}
 
 
 # -----------------------------------------------------------------------------
@@ -498,9 +609,10 @@ def get_scans(
 def get_manual_tests(
     program_id: str,
     current_user: dict[str, str] = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    program = get_program_or_404(program_id, current_user)
-    return {"manual_tests": program["manual_tests"]}
+    program = get_program_or_404(program_id, current_user, db)
+    return {"manual_tests": [serialize_manual_test(t) for t in program.manual_tests]}
 
 
 @app.post("/programs/{program_id}/manual-tests")
@@ -508,18 +620,21 @@ def add_manual_test(
     program_id: str,
     payload: ManualTestCreate,
     current_user: dict[str, str] = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    program = get_program_or_404(program_id, current_user)
-    test = {
-        "id": generate_id(),
-        "title": payload.title,
-        "hypothesis": payload.hypothesis or "",
-        "payload": payload.payload or "",
-        "evidence": payload.evidence or "",
-        "status": payload.status,
-    }
-    program["manual_tests"].append(test)
-    return test
+    get_program_or_404(program_id, current_user, db)
+    test = ManualTest(
+        program_id=program_id,
+        title=payload.title,
+        hypothesis=payload.hypothesis or "",
+        payload=payload.payload or "",
+        evidence=payload.evidence or "",
+        status=payload.status,
+    )
+    db.add(test)
+    db.commit()
+    db.refresh(test)
+    return serialize_manual_test(test)
 
 
 @app.delete("/programs/{program_id}/manual-tests/{test_id}")
@@ -527,12 +642,16 @@ def delete_manual_test(
     program_id: str,
     test_id: str,
     current_user: dict[str, str] = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    program = get_program_or_404(program_id, current_user)
-    before = len(program["manual_tests"])
-    program["manual_tests"] = [t for t in program["manual_tests"] if t["id"] != test_id]
-    if len(program["manual_tests"]) == before:
+    get_program_or_404(program_id, current_user, db)
+    test = db.query(ManualTest).filter(
+        ManualTest.id == test_id, ManualTest.program_id == program_id
+    ).first()
+    if not test:
         raise HTTPException(status_code=404, detail="Manual test not found")
+    db.delete(test)
+    db.commit()
     return {"message": "Manual test deleted"}
 
 
@@ -544,9 +663,10 @@ def delete_manual_test(
 def get_findings(
     program_id: str,
     current_user: dict[str, str] = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    program = get_program_or_404(program_id, current_user)
-    return {"findings": program["findings"]}
+    program = get_program_or_404(program_id, current_user, db)
+    return {"findings": [serialize_finding(f) for f in program.findings]}
 
 
 @app.post("/programs/{program_id}/findings")
@@ -554,21 +674,24 @@ def add_finding(
     program_id: str,
     payload: FindingCreate,
     current_user: dict[str, str] = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    program = get_program_or_404(program_id, current_user)
-    finding = {
-        "id": generate_id(),
-        "title": payload.title,
-        "severity": payload.severity,
-        "asset": payload.asset or "",
-        "status": payload.status,
-        "summary": payload.summary or "",
-        "steps": payload.steps or "",
-        "impact": payload.impact or "",
-        "remediation": payload.remediation or "",
-    }
-    program["findings"].append(finding)
-    return finding
+    get_program_or_404(program_id, current_user, db)
+    finding = Finding(
+        program_id=program_id,
+        title=payload.title,
+        severity=payload.severity,
+        asset=payload.asset or "",
+        status=payload.status,
+        summary=payload.summary or "",
+        steps=payload.steps or "",
+        impact=payload.impact or "",
+        remediation=payload.remediation or "",
+    )
+    db.add(finding)
+    db.commit()
+    db.refresh(finding)
+    return serialize_finding(finding)
 
 
 @app.patch("/programs/{program_id}/findings/{finding_id}")
@@ -577,13 +700,19 @@ def update_finding(
     finding_id: str,
     payload: FindingCreate,
     current_user: dict[str, str] = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    program = get_program_or_404(program_id, current_user)
-    for finding in program["findings"]:
-        if finding["id"] == finding_id:
-            finding.update(payload.model_dump())
-            return finding
-    raise HTTPException(status_code=404, detail="Finding not found")
+    get_program_or_404(program_id, current_user, db)
+    finding = db.query(Finding).filter(
+        Finding.id == finding_id, Finding.program_id == program_id
+    ).first()
+    if not finding:
+        raise HTTPException(status_code=404, detail="Finding not found")
+    for key, value in payload.model_dump().items():
+        setattr(finding, key, value)
+    db.commit()
+    db.refresh(finding)
+    return serialize_finding(finding)
 
 
 @app.delete("/programs/{program_id}/findings/{finding_id}")
@@ -591,12 +720,16 @@ def delete_finding(
     program_id: str,
     finding_id: str,
     current_user: dict[str, str] = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    program = get_program_or_404(program_id, current_user)
-    before = len(program["findings"])
-    program["findings"] = [f for f in program["findings"] if f["id"] != finding_id]
-    if len(program["findings"]) == before:
+    get_program_or_404(program_id, current_user, db)
+    finding = db.query(Finding).filter(
+        Finding.id == finding_id, Finding.program_id == program_id
+    ).first()
+    if not finding:
         raise HTTPException(status_code=404, detail="Finding not found")
+    db.delete(finding)
+    db.commit()
     return {"message": "Finding deleted"}
 
 
@@ -608,9 +741,10 @@ def delete_finding(
 def get_reports(
     program_id: str,
     current_user: dict[str, str] = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    program = get_program_or_404(program_id, current_user)
-    return {"reports": program["reports"]}
+    program = get_program_or_404(program_id, current_user, db)
+    return {"reports": [serialize_report(r) for r in program.reports]}
 
 
 @app.post("/programs/{program_id}/reports")
@@ -618,22 +752,25 @@ def add_report(
     program_id: str,
     payload: ReportCreate,
     current_user: dict[str, str] = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    program = get_program_or_404(program_id, current_user)
-    report = {
-        "id": generate_id(),
-        "finding_id": payload.finding_id or "",
-        "title": payload.title,
-        "summary": payload.summary or "",
-        "steps": payload.steps or "",
-        "impact": payload.impact or "",
-        "remediation": payload.remediation or "",
-        "cwe": payload.cwe or "",
-        "cvss": payload.cvss or "",
-        "status": payload.status,
-    }
-    program["reports"].append(report)
-    return report
+    get_program_or_404(program_id, current_user, db)
+    report = Report(
+        program_id=program_id,
+        finding_id=payload.finding_id or "",
+        title=payload.title,
+        summary=payload.summary or "",
+        steps=payload.steps or "",
+        impact=payload.impact or "",
+        remediation=payload.remediation or "",
+        cwe=payload.cwe or "",
+        cvss=payload.cvss or "",
+        status=payload.status,
+    )
+    db.add(report)
+    db.commit()
+    db.refresh(report)
+    return serialize_report(report)
 
 
 @app.delete("/programs/{program_id}/reports/{report_id}")
@@ -641,12 +778,16 @@ def delete_report(
     program_id: str,
     report_id: str,
     current_user: dict[str, str] = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    program = get_program_or_404(program_id, current_user)
-    before = len(program["reports"])
-    program["reports"] = [r for r in program["reports"] if r["id"] != report_id]
-    if len(program["reports"]) == before:
+    get_program_or_404(program_id, current_user, db)
+    report = db.query(Report).filter(
+        Report.id == report_id, Report.program_id == program_id
+    ).first()
+    if not report:
         raise HTTPException(status_code=404, detail="Report not found")
+    db.delete(report)
+    db.commit()
     return {"message": "Report deleted"}
 
 
@@ -660,8 +801,9 @@ async def import_results(
     tool_type: ToolType = Form(...),
     file: UploadFile = File(...),
     current_user: dict[str, str] = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    program = get_program_or_404(program_id, current_user)
+    get_program_or_404(program_id, current_user, db)
 
     ext = Path(file.filename or "").suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
@@ -671,39 +813,46 @@ async def import_results(
         raise HTTPException(status_code=400, detail="Unsupported file type")
 
     raw = await file.read()
-
     if len(raw) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="File too large")
 
     parsed = parse_json_or_jsonl(raw)
     items = normalize_to_list(parsed)
 
-    import_record = {
-        "id": generate_id(),
-        "tool_type": tool_type,
-        "filename": "redacted",
-        "imported_count": 0,
-    }
+    imported_count = 0
 
     if tool_type == "ffuf":
-        recon_items = parse_ffuf(items)
-        program["recon"].extend(recon_items)
-        import_record["imported_count"] = len(recon_items)
+        recon_items = parse_ffuf(items, program_id)
+        for r in recon_items:
+            db.add(r)
+        imported_count = len(recon_items)
 
     elif tool_type == "httpx":
-        recon_items = parse_httpx(items)
-        program["recon"].extend(recon_items)
-        import_record["imported_count"] = len(recon_items)
+        recon_items = parse_httpx(items, program_id)
+        for r in recon_items:
+            db.add(r)
+        imported_count = len(recon_items)
 
     elif tool_type == "nuclei":
-        scan_items = parse_nuclei(items)
-        program["scans"].extend(scan_items)
-        import_record["imported_count"] = len(scan_items)
+        scan_items = parse_nuclei(items, program_id)
+        for s in scan_items:
+            db.add(s)
+        imported_count = len(scan_items)
 
-    program["imports"].append(import_record)
+    record = ImportRecord(
+        program_id=program_id,
+        tool_type=tool_type,
+        filename="redacted",
+        imported_count=imported_count,
+    )
+    db.add(record)
+    db.commit()
+
+    # Re-fetch full program to return updated state
+    program = db.query(Program).filter(Program.id == program_id).first()
 
     return {
         "message": "Import complete",
-        "import_record": import_record,
-        "program": program,
+        "import_record": serialize_import_record(record),
+        "program": serialize_program(program),
     }
