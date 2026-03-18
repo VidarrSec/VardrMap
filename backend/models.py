@@ -11,11 +11,22 @@ def new_uuid() -> str:
     return str(uuid.uuid4())
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    github_id = Column(String, primary_key=True)
+    username = Column(String(100), default="")
+    email = Column(String(200), default="")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    programs = relationship("Program", back_populates="owner", cascade="all, delete-orphan")
+
+
 class Program(Base):
     __tablename__ = "programs"
 
     id = Column(String, primary_key=True, default=new_uuid)
-    owner_github_id = Column(String, nullable=False, index=True)
+    owner_github_id = Column(String, ForeignKey("users.github_id"), nullable=False, index=True)
     name = Column(String(120), nullable=False)
     platform = Column(String(80), default="")
     program_url = Column(String(500), default="")
@@ -24,6 +35,7 @@ class Program(Base):
     safe_harbor_notes = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    owner = relationship("User", back_populates="programs")
     scope_items = relationship("ScopeItem", back_populates="program", cascade="all, delete-orphan")
     manual_tests = relationship("ManualTest", back_populates="program", cascade="all, delete-orphan")
     findings = relationship("Finding", back_populates="program", cascade="all, delete-orphan")
@@ -108,7 +120,7 @@ class ReconItem(Base):
     status_code = Column(Integer, nullable=True)
     webserver = Column(String(200), default="")
     port = Column(String(10), default="")
-    tech = Column(Text, default="")        # stored as comma-separated string
+    tech = Column(Text, default="")
     content_type = Column(String(200), default="")
     length = Column(Integer, nullable=True)
     words = Column(Integer, nullable=True)

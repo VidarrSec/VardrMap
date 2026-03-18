@@ -15,8 +15,9 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from jose import JWTError, jwt
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
+import re
 
 from db import Base, engine, get_db
 from models import (
@@ -28,6 +29,7 @@ from models import (
     Report,
     ScanItem,
     ScopeItem,
+    User,
 )
 
 # -----------------------------------------------------------------------------
@@ -35,7 +37,6 @@ from models import (
 # -----------------------------------------------------------------------------
 
 Base.metadata.create_all(bind=engine)
-
 
 # -----------------------------------------------------------------------------
 # Environment config
@@ -63,7 +64,6 @@ ALLOWED_CONTENT_TYPES = {
     "text/plain",
 }
 
-
 # -----------------------------------------------------------------------------
 # App
 # -----------------------------------------------------------------------------
@@ -78,7 +78,6 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
-
 # -----------------------------------------------------------------------------
 # Enums / strict types
 # -----------------------------------------------------------------------------
@@ -89,6 +88,41 @@ ManualStatus = Literal["new", "in_progress", "validated", "closed"]
 ScopeKind = Literal["domain", "subdomain", "url", "cidr", "api", "mobile"]
 ReportStatus = Literal["draft", "submitted", "accepted", "duplicate", "informative", "resolved"]
 ToolType = Literal["ffuf", "httpx", "nuclei"]
+
+# -----------------------------------------------------------------------------
+# ✦ INPUT SANITIZATION
+# Strips HTML tags and null bytes from all user-supplied strings.
+# Short identifier fields (name, title, asset) additionally reject
+# strings that look like script injection attempts.
+# -----------------------------------------------------------------------------
+
+# Matches any HTML/XML tag
+_HTML_TAG_RE = re.compile(r'<[^>]*>', re.IGNORECASE)
+# Patterns that signal injection in short identifier fields
+_INJECT_RE = re.compile(
+    r'(<script|<img|<svg|onerror|onload|javascript:|data:text/html)',
+    re.IGNORECASE,
+)
+
+
+def strip_html(value: str | None) -> str:
+    """Remove HTML tags and null bytes. Safe for long-form markdown fields."""
+    if not value:
+        return value or ""
+    value = value.replace(chr(0), "")          # null bytes
+    value = _HTML_TAG_RE.sub("", value)          # strip tags
+    return value.strip()
+
+
+def sanitize_identifier(value: str | None) -> str:
+    """Strict sanitizer for short fields like name, title, asset.
+    Strips HTML tags AND rejects payloads that still look dangerous."""
+    if not value:
+        return value or ""
+    cleaned = strip_html(value)
+    if _INJECT_RE.search(cleaned):
+        raise ValueError("Invalid characters in field")
+    return cleaned
 
 
 # -----------------------------------------------------------------------------
@@ -103,6 +137,15 @@ class ProgramCreate(BaseModel):
     severity_guidance: Optional[str] = Field(default="", max_length=5000)
     safe_harbor_notes: Optional[str] = Field(default="", max_length=5000)
 
+    # ✦ SANITIZATION VALIDATORS
+    @field_validator("name", "platform", mode="before")
+    @classmethod
+    def sanitize_short(cls, v): return sanitize_identifier(v)
+
+    @field_validator("program_url", "scope_summary", "severity_guidance", "safe_harbor_notes", mode="before")
+    @classmethod
+    def sanitize_long(cls, v): return strip_html(v)
+
 
 class ProgramUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=120)
@@ -112,11 +155,29 @@ class ProgramUpdate(BaseModel):
     severity_guidance: Optional[str] = Field(default=None, max_length=5000)
     safe_harbor_notes: Optional[str] = Field(default=None, max_length=5000)
 
+    # ✦ SANITIZATION VALIDATORS
+    @field_validator("name", "platform", mode="before")
+    @classmethod
+    def sanitize_short(cls, v): return sanitize_identifier(v) if v else v
+
+    @field_validator("program_url", "scope_summary", "severity_guidance", "safe_harbor_notes", mode="before")
+    @classmethod
+    def sanitize_long(cls, v): return strip_html(v) if v else v
+
 
 class ScopeItemCreate(BaseModel):
     value: str = Field(min_length=1, max_length=500)
     kind: ScopeKind = "domain"
     notes: Optional[str] = Field(default="", max_length=2000)
+
+    # ✦ SANITIZATION VALIDATORS
+    @field_validator("value", mode="before")
+    @classmethod
+    def sanitize_value(cls, v): return sanitize_identifier(v)
+
+    @field_validator("notes", mode="before")
+    @classmethod
+    def sanitize_notes(cls, v): return strip_html(v)
 
 
 class ManualTestCreate(BaseModel):
@@ -125,6 +186,16 @@ class ManualTestCreate(BaseModel):
     payload: Optional[str] = Field(default="", max_length=10000)
     evidence: Optional[str] = Field(default="", max_length=10000)
     status: ManualStatus = "new"
+
+    # ✦ SANITIZATION VALIDATORS
+    @field_validator("title", mode="before")
+    @classmethod
+    def sanitize_title(cls, v): return sanitize_identifier(v)
+
+    @field_validator("hypothesis", "evidence", mode="before")
+    @classmethod
+    def sanitize_long(cls, v): return strip_html(v)
+    # payload intentionally not stripped — users paste raw HTTP/code here
 
 
 class FindingCreate(BaseModel):
@@ -136,6 +207,15 @@ class FindingCreate(BaseModel):
     steps: Optional[str] = Field(default="", max_length=10000)
     impact: Optional[str] = Field(default="", max_length=5000)
     remediation: Optional[str] = Field(default="", max_length=5000)
+
+    # ✦ SANITIZATION VALIDATORS
+    @field_validator("title", "asset", mode="before")
+    @classmethod
+    def sanitize_short(cls, v): return sanitize_identifier(v) if v else v
+
+    @field_validator("summary", "steps", "impact", "remediation", mode="before")
+    @classmethod
+    def sanitize_long(cls, v): return strip_html(v)
 
 
 class ReportCreate(BaseModel):
@@ -149,9 +229,17 @@ class ReportCreate(BaseModel):
     cvss: Optional[str] = Field(default="", max_length=50)
     status: ReportStatus = "draft"
 
+    # ✦ SANITIZATION VALIDATORS
+    @field_validator("title", mode="before")
+    @classmethod
+    def sanitize_title(cls, v): return sanitize_identifier(v)
+
+    @field_validator("summary", "steps", "impact", "remediation", "cwe", "cvss", mode="before")
+    @classmethod
+    def sanitize_long(cls, v): return strip_html(v)
 
 # -----------------------------------------------------------------------------
-# Serializers — convert ORM rows to the dicts the frontend expects
+# Serializers
 # -----------------------------------------------------------------------------
 
 def serialize_scope_item(item: ScopeItem) -> dict:
@@ -204,7 +292,7 @@ def serialize_report(r: Report) -> dict:
 
 
 def serialize_recon_item(item: ReconItem) -> dict:
-    tech_list = [t for t in (item.tech or "").split(",") if t] if item.tech else []
+    tech_list = [t for t in (item.tech or "").split(",") if t]
     return {
         "id": item.id,
         "source": item.source or "",
@@ -251,7 +339,6 @@ def serialize_import_record(r: ImportRecord) -> dict:
 
 
 def serialize_program(p: Program) -> dict:
-    """Full nested program object matching the frontend's expected shape."""
     return {
         "id": p.id,
         "owner_github_id": p.owner_github_id,
@@ -272,7 +359,6 @@ def serialize_program(p: Program) -> dict:
         "findings": [serialize_finding(f) for f in p.findings],
         "reports": [serialize_report(r) for r in p.reports],
     }
-
 
 # -----------------------------------------------------------------------------
 # Auth helpers
@@ -312,16 +398,18 @@ def get_current_user(authorization: str | None = Header(default=None)) -> dict[s
 def get_program_or_404(program_id: str, current_user: dict[str, str], db: Session) -> Program:
     program = (
         db.query(Program)
-        .filter(Program.id == program_id, Program.owner_github_id == current_user["github_id"])
+        .filter(
+            Program.id == program_id,
+            Program.owner_github_id == current_user["github_id"],
+        )
         .first()
     )
     if not program:
         raise HTTPException(status_code=404, detail="Program not found")
     return program
 
-
 # -----------------------------------------------------------------------------
-# Import parsers (unchanged)
+# Import parsers
 # -----------------------------------------------------------------------------
 
 def parse_json_or_jsonl(raw: bytes) -> Any:
@@ -376,11 +464,7 @@ def parse_httpx(items: list[dict[str, Any]], program_id: str) -> list[ReconItem]
     out = []
     for item in items:
         tech_value = item.get("tech") or item.get("technologies") or []
-        if isinstance(tech_value, list):
-            tech_str = ",".join(str(t) for t in tech_value)
-        else:
-            tech_str = str(tech_value) if tech_value else ""
-
+        tech_str = ",".join(str(t) for t in tech_value) if isinstance(tech_value, list) else str(tech_value or "")
         out.append(ReconItem(
             program_id=program_id,
             source="httpx",
@@ -417,7 +501,6 @@ def parse_nuclei(items: list[dict[str, Any]], program_id: str) -> list[ScanItem]
         ))
     return out
 
-
 # -----------------------------------------------------------------------------
 # Public routes
 # -----------------------------------------------------------------------------
@@ -436,6 +519,35 @@ def health_check():
 def me(current_user: dict[str, str] = Depends(get_current_user)):
     return current_user
 
+# -----------------------------------------------------------------------------
+# Auth sync — upserts user record on login (called once by frontend)
+# -----------------------------------------------------------------------------
+
+@app.post("/auth/sync")
+def auth_sync(
+    current_user: dict[str, str] = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.github_id == current_user["github_id"]).first()
+    if user:
+        # Update username/email in case they changed on GitHub
+        user.username = current_user["username"]
+        user.email = current_user["email"]
+    else:
+        user = User(
+            github_id=current_user["github_id"],
+            username=current_user["username"],
+            email=current_user["email"],
+        )
+        db.add(user)
+    db.commit()
+    db.refresh(user)
+    return {
+        "github_id": user.github_id,
+        "username": user.username,
+        "email": user.email,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+    }
 
 # -----------------------------------------------------------------------------
 # Programs
@@ -456,6 +568,17 @@ def create_program(
     current_user: dict[str, str] = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    # Ensure user row exists before creating program (FK safety)
+    user = db.query(User).filter(User.github_id == current_user["github_id"]).first()
+    if not user:
+        user = User(
+            github_id=current_user["github_id"],
+            username=current_user["username"],
+            email=current_user["email"],
+        )
+        db.add(user)
+        db.flush()
+
     program = Program(
         owner_github_id=current_user["github_id"],
         name=payload.name,
@@ -506,7 +629,6 @@ def delete_program(
     db.delete(program)
     db.commit()
     return {"message": "Program deleted"}
-
 
 # -----------------------------------------------------------------------------
 # Scope
@@ -576,9 +698,8 @@ def delete_scope_item(
     db.commit()
     return {"message": "Scope item deleted"}
 
-
 # -----------------------------------------------------------------------------
-# Recon / scans (read-only — written via imports)
+# Recon / scans
 # -----------------------------------------------------------------------------
 
 @app.get("/programs/{program_id}/recon")
@@ -599,7 +720,6 @@ def get_scans(
 ):
     program = get_program_or_404(program_id, current_user, db)
     return {"scans": [serialize_scan_item(s) for s in program.scan_items]}
-
 
 # -----------------------------------------------------------------------------
 # Manual tests
@@ -646,14 +766,14 @@ def delete_manual_test(
 ):
     get_program_or_404(program_id, current_user, db)
     test = db.query(ManualTest).filter(
-        ManualTest.id == test_id, ManualTest.program_id == program_id
+        ManualTest.id == test_id,
+        ManualTest.program_id == program_id,
     ).first()
     if not test:
         raise HTTPException(status_code=404, detail="Manual test not found")
     db.delete(test)
     db.commit()
     return {"message": "Manual test deleted"}
-
 
 # -----------------------------------------------------------------------------
 # Findings
@@ -704,7 +824,8 @@ def update_finding(
 ):
     get_program_or_404(program_id, current_user, db)
     finding = db.query(Finding).filter(
-        Finding.id == finding_id, Finding.program_id == program_id
+        Finding.id == finding_id,
+        Finding.program_id == program_id,
     ).first()
     if not finding:
         raise HTTPException(status_code=404, detail="Finding not found")
@@ -724,14 +845,14 @@ def delete_finding(
 ):
     get_program_or_404(program_id, current_user, db)
     finding = db.query(Finding).filter(
-        Finding.id == finding_id, Finding.program_id == program_id
+        Finding.id == finding_id,
+        Finding.program_id == program_id,
     ).first()
     if not finding:
         raise HTTPException(status_code=404, detail="Finding not found")
     db.delete(finding)
     db.commit()
     return {"message": "Finding deleted"}
-
 
 # -----------------------------------------------------------------------------
 # Reports
@@ -782,14 +903,14 @@ def delete_report(
 ):
     get_program_or_404(program_id, current_user, db)
     report = db.query(Report).filter(
-        Report.id == report_id, Report.program_id == program_id
+        Report.id == report_id,
+        Report.program_id == program_id,
     ).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
     db.delete(report)
     db.commit()
     return {"message": "Report deleted"}
-
 
 # -----------------------------------------------------------------------------
 # Imports
@@ -818,7 +939,6 @@ async def import_results(
 
     parsed = parse_json_or_jsonl(raw)
     items = normalize_to_list(parsed)
-
     imported_count = 0
 
     if tool_type == "ffuf":
@@ -826,13 +946,11 @@ async def import_results(
         for r in recon_items:
             db.add(r)
         imported_count = len(recon_items)
-
     elif tool_type == "httpx":
         recon_items = parse_httpx(items, program_id)
         for r in recon_items:
             db.add(r)
         imported_count = len(recon_items)
-
     elif tool_type == "nuclei":
         scan_items = parse_nuclei(items, program_id)
         for s in scan_items:
@@ -848,9 +966,7 @@ async def import_results(
     db.add(record)
     db.commit()
 
-    # Re-fetch full program to return updated state
     program = db.query(Program).filter(Program.id == program_id).first()
-
     return {
         "message": "Import complete",
         "import_record": serialize_import_record(record),
