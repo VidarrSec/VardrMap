@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { signIn, signOut } from "next-auth/react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1353,15 +1355,53 @@ function Input({ label, value, onChange }: { label: string; value: string; onCha
 }
 
 function Textarea({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  const [mode, setMode] = useState<"edit" | "preview">("edit");
+
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</label>
-      <textarea
-        rows={4}
-        className="w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 placeholder-zinc-700 transition focus:border-zinc-600 focus:outline-none"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      <div className="mb-1.5 flex items-center justify-between">
+        <label className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</label>
+        <div className="flex rounded-md border border-zinc-800 bg-zinc-950 p-0.5">
+          <button
+            onClick={() => setMode("edit")}
+            className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition ${
+              mode === "edit" ? "bg-zinc-700 text-zinc-200" : "text-zinc-600 hover:text-zinc-400"
+            }`}
+          >
+            Edit
+          </button>
+          <button
+            onClick={() => setMode("preview")}
+            className={`rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider transition ${
+              mode === "preview" ? "bg-zinc-700 text-zinc-200" : "text-zinc-600 hover:text-zinc-400"
+            }`}
+          >
+            Preview
+          </button>
+        </div>
+      </div>
+
+      {mode === "edit" && (
+        <textarea
+          rows={4}
+          className="w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-200 placeholder-zinc-700 transition focus:border-zinc-600 focus:outline-none"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Supports markdown…"
+        />
+      )}
+
+      {mode === "preview" && (
+        <div className="min-h-[104px] w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2">
+          {value.trim() ? (
+            <div className="markdown-preview text-sm text-zinc-400 leading-relaxed space-y-2 [&_h1]:text-lg [&_h1]:font-semibold [&_h1]:text-zinc-200 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:text-zinc-200 [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:text-zinc-300 [&_strong]:text-zinc-200 [&_a]:text-blue-400 [&_a]:no-underline hover:[&_a]:underline [&_code]:rounded [&_code]:bg-zinc-800 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs [&_code]:text-emerald-400 [&_code]:font-mono [&_pre]:rounded-md [&_pre]:border [&_pre]:border-zinc-800 [&_pre]:bg-zinc-900 [&_pre]:p-3 [&_pre]:text-xs [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_li]:text-zinc-400 [&_blockquote]:border-l-2 [&_blockquote]:border-zinc-700 [&_blockquote]:pl-3 [&_blockquote]:text-zinc-500 [&_hr]:border-zinc-800">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{value}</ReactMarkdown>
+            </div>
+          ) : (
+            <p className="text-xs text-zinc-700 italic">Nothing to preview.</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
