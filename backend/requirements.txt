@@ -6,4 +6,4 @@ python-jose[cryptography]
 sqlalchemy
 psycopg[binary]
 python-dotenv
-psycop2-binary
+psycopg2-binary
