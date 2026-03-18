@@ -18,6 +18,7 @@ from jose import JWTError, jwt
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 import re
+import bleach
 
 from db import Base, engine, get_db
 from models import (
@@ -91,38 +92,74 @@ ToolType = Literal["ffuf", "httpx", "nuclei"]
 
 # -----------------------------------------------------------------------------
 # ✦ INPUT SANITIZATION
-# Strips HTML tags and null bytes from all user-supplied strings.
-# Short identifier fields (name, title, asset) additionally reject
-# strings that look like script injection attempts.
+#
+# Strategy (order matters):
+#   1. Null byte removal
+#   2. Detect injection patterns on the RAW input (before any stripping)
+#      This prevents obfuscated payloads like <scr<script>ipt> bypassing
+#      regex-based detection by stripping first.
+#   3. Strip all HTML using bleach (proper parser, not regex)
+#      bleach handles nested/malformed tags that fool simple regex.
+#
+# Short fields (name, title, asset): detect then strip, reject on match.
+# Long fields (summary, steps, markdown): strip only, no rejection
+#   — allows markdown syntax like **bold** and `code` safely.
 # -----------------------------------------------------------------------------
 
-# Matches any HTML/XML tag
-_HTML_TAG_RE = re.compile(r'<[^>]*>', re.IGNORECASE)
-# Patterns that signal injection in short identifier fields
+# Raw injection patterns — checked BEFORE any stripping
+# Covers script tags, event handlers, javascript: URIs, data URIs
 _INJECT_RE = re.compile(
-    r'(<script|<img|<svg|onerror|onload|javascript:|data:text/html)',
-    re.IGNORECASE,
+    r"""(
+        <script           |  # script tags
+        <iframe           |  # iframe injection
+        <object           |  # object/embed
+        <embed            |
+        <svg              |  # SVG-based XSS
+        <img              |  # img onerror
+        javascript\s*:    |  # javascript: URI
+        data\s*:.*text/html  # data URI XSS
+    )""",
+    re.IGNORECASE | re.VERBOSE,
 )
+
+# Event handler attributes — also checked on raw input
+_EVENT_HANDLER_RE = re.compile(r'on\w+\s*=', re.IGNORECASE)
+
+
+def _remove_null_bytes(value: str) -> str:
+    return value.replace(chr(0), "")
 
 
 def strip_html(value: str | None) -> str:
-    """Remove HTML tags and null bytes. Safe for long-form markdown fields."""
+    """Strip all HTML tags using bleach. Safe for long-form markdown fields.
+    Allows no tags at all — markdown syntax (**, `code`, #) is plain text
+    and passes through untouched. bleach handles obfuscated/nested tags
+    that fool regex-based strippers.
+    """
     if not value:
         return value or ""
-    value = value.replace(chr(0), "")          # null bytes
-    value = _HTML_TAG_RE.sub("", value)          # strip tags
-    return value.strip()
+    value = _remove_null_bytes(value)
+    # bleach.clean with no allowed tags strips everything
+    return bleach.clean(value, tags=[], attributes={}, strip=True).strip()
 
 
 def sanitize_identifier(value: str | None) -> str:
-    """Strict sanitizer for short fields like name, title, asset.
-    Strips HTML tags AND rejects payloads that still look dangerous."""
+    """Strict sanitizer for short identifier fields: name, title, asset.
+
+    Detection runs on RAW input before stripping — this catches obfuscated
+    payloads like <scr<script>ipt> that survive naive regex stripping first.
+    After detection, bleach strips any remaining tags.
+    """
     if not value:
         return value or ""
-    cleaned = strip_html(value)
-    if _INJECT_RE.search(cleaned):
+    raw = _remove_null_bytes(value)
+
+    # ✦ Detect on raw input FIRST — before any stripping
+    if _INJECT_RE.search(raw) or _EVENT_HANDLER_RE.search(raw):
         raise ValueError("Invalid characters in field")
-    return cleaned
+
+    # Strip any remaining HTML with bleach
+    return bleach.clean(raw, tags=[], attributes={}, strip=True).strip()
 
 
 # -----------------------------------------------------------------------------

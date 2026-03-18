@@ -75,7 +75,7 @@ function SeverityBadge({ severity }: { severity: string }) {
     s === "high"     ? "bg-orange-950 text-orange-400 border-orange-800" :
     s === "medium"   ? "bg-yellow-950 text-yellow-400 border-yellow-800" :
     s === "low"      ? "bg-blue-950 text-blue-400 border-blue-800" :
-                       "bg-[#1e1e2e] text-[#6e6a86] border-[#2a2a3e]";
+                       "bg-[#161616] text-[#6e6a86] border-[#2a2a3e]";
   return (
     <span className={`inline-flex items-center rounded border px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider ${color}`}>
       {severity || "info"}
@@ -87,9 +87,9 @@ function StatusBadge({ status }: { status: string }) {
   const s = status?.toLowerCase();
   const color =
     s === "validated" || s === "accepted" ? "bg-emerald-950 text-emerald-400 border-emerald-800" :
-    s === "in_progress" || s === "triaged" ? "bg-purple-950 text-purple-400 border-purple-800" :
-    s === "closed" || s === "resolved"    ? "bg-[#1e1e2e] text-[#6e6a86] border-[#2a2a3e]" :
-                                            "bg-[#1e1e2e] text-[#908caa] border-[#2a2a3e]";
+    s === "in_progress" || s === "triaged" ? "bg-emerald-950 text-emerald-400 border-emerald-800" :
+    s === "closed" || s === "resolved"    ? "bg-[#161616] text-[#6e6a86] border-[#2a2a3e]" :
+                                            "bg-[#161616] text-[#6b7280] border-[#2a2a3e]";
   return (
     <span className={`inline-flex items-center rounded border px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider ${color}`}>
       {status || "—"}
@@ -395,8 +395,8 @@ export default function Home() {
 
   if (authLoading) {
     return (
-      <main className="min-h-screen bg-[#1e1e2e] text-[#cdd6f4] flex items-center justify-center">
-        <div className="flex items-center gap-3 text-[#6c7086]">
+      <main className="min-h-screen bg-[#161616] text-[#f1f5f9] flex items-center justify-center">
+        <div className="flex items-center gap-3 text-[#52525b]">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#7f849c]" />
           <span className="text-sm tracking-wide font-mono">initializing…</span>
         </div>
@@ -406,14 +406,14 @@ export default function Home() {
 
   if (!session?.backendToken) {
     return (
-      <main className="min-h-screen bg-[#1e1e2e] text-[#cdd6f4] flex items-center justify-center p-6">
-        <div className="w-full max-w-sm rounded-2xl border border-[#313244] bg-[#181825] p-10 text-center shadow-2xl">
-          <div className="mx-auto mb-5 flex h-10 w-10 items-center justify-center rounded-xl bg-[#313244] text-[#cba6f7]">
+      <main className="min-h-screen bg-[#161616] text-[#f1f5f9] flex items-center justify-center p-6">
+        <div className="w-full max-w-sm rounded-2xl border border-[#2e2e2e] bg-[#1a1a1a] p-10 text-center shadow-2xl">
+          <div className="mx-auto mb-5 flex h-10 w-10 items-center justify-center rounded-xl bg-[#2e2e2e] text-[#f59e0b]">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#cdd6f4]">VardrMap</h1>
-          <p className="mt-2 text-sm text-[#6c7086]">Sign in with GitHub to access your private bug bounty workspace.</p>
-          <button onClick={() => signIn("github")} className="mt-7 w-full rounded-lg bg-[#cba6f7] px-4 py-2.5 text-sm font-semibold text-[#1e1e2e] transition hover:bg-[#d0b4fa] active:scale-[0.98]">
+          <h1 className="text-2xl font-bold tracking-tight text-[#f1f5f9]">VardrMap</h1>
+          <p className="mt-2 text-sm text-[#52525b]">Sign in with GitHub to access your private bug bounty workspace.</p>
+          <button onClick={() => signIn("github")} className="mt-7 w-full rounded-lg bg-[#f59e0b] px-4 py-2.5 text-sm font-semibold text-[#161616] transition hover:bg-[#fbbf24] active:scale-[0.98]">
             Sign in with GitHub
           </button>
         </div>
@@ -426,28 +426,28 @@ export default function Home() {
   // -------------------------------------------------------------------------
 
   return (
-    <main className="min-h-screen bg-[#1e1e2e] text-[#cdd6f4]">
+    <main className="min-h-screen bg-[#161616] text-[#f1f5f9]">
       <div className={`grid min-h-screen transition-all duration-200 ${sidebarCollapsed ? "grid-cols-1 lg:grid-cols-[52px_1fr]" : "grid-cols-1 lg:grid-cols-[240px_1fr]"}`}>
 
         {/* Sidebar */}
-        <aside className="flex flex-col border-r border-[#313244] bg-[#181825] overflow-hidden">
+        <aside className="flex flex-col border-r border-[#2e2e2e] bg-[#1a1a1a] overflow-hidden">
 
           {/* Brand row */}
-          <div className="flex items-center justify-between gap-2 border-b border-[#313244] px-3 py-4">
+          <div className="flex items-center justify-between gap-2 border-b border-[#2e2e2e] px-3 py-4">
             {!sidebarCollapsed && (
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-base font-bold tracking-tight text-[#cdd6f4]">VardrMap</span>
-                  <span className="rounded bg-[#313244] px-1.5 py-0.5 font-mono text-[9px] text-[#6c7086]">BETA</span>
+                  <span className="text-base font-bold tracking-tight text-[#f1f5f9]">VardrMap</span>
+                  <span className="rounded bg-[#2e2e2e] px-1.5 py-0.5 font-mono text-[9px] text-[#52525b]">BETA</span>
                 </div>
-                <p className="mt-0.5 truncate text-[10px] text-[#6c7086]">
+                <p className="mt-0.5 truncate text-[10px] text-[#52525b]">
                   {session.user?.username || session.user?.email || "GitHub user"}
                 </p>
               </div>
             )}
             <button
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="flex-shrink-0 rounded-md p-1.5 text-[#6c7086] transition hover:bg-[#313244] hover:text-[#cdd6f4]"
+              className="flex-shrink-0 rounded-md p-1.5 text-[#52525b] transition hover:bg-[#2e2e2e] hover:text-[#f1f5f9]"
               title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -458,10 +458,10 @@ export default function Home() {
 
           {/* Program selector */}
           {!sidebarCollapsed && (
-            <div className="border-b border-[#313244] px-3 py-3">
-              <label className="mb-1.5 block text-[9px] font-semibold uppercase tracking-widest text-[#6c7086]">Active Program</label>
+            <div className="border-b border-[#2e2e2e] px-3 py-3">
+              <label className="mb-1.5 block text-[9px] font-semibold uppercase tracking-widest text-[#52525b]">Active Program</label>
               <select
-                className="w-full rounded-md border border-[#313244] bg-[#1e1e2e] px-2.5 py-1.5 text-xs text-[#cdd6f4] transition focus:border-[#cba6f7] focus:outline-none"
+                className="w-full rounded-md border border-[#2e2e2e] bg-[#161616] px-2.5 py-1.5 text-xs text-[#f1f5f9] transition focus:border-[#f59e0b] focus:outline-none"
                 value={selectedProgramId}
                 onChange={(e) => setSelectedProgramId(e.target.value)}
               >
@@ -479,15 +479,15 @@ export default function Home() {
                 onClick={() => setActiveSection(section)}
                 className={`group relative flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition-all duration-150 ${
                   activeSection === section
-                    ? "bg-[#313244] text-[#cdd6f4]"
-                    : "text-[#6c7086] hover:bg-[#26263a] hover:text-[#bac2de]"
+                    ? "bg-[#f59e0b]/10 text-[#f59e0b] font-semibold"
+                    : "text-[#52525b] hover:bg-[#242424] hover:text-[#94a3b8]"
                 }`}
                 title={sidebarCollapsed ? label : undefined}
               >
                 {activeSection === section && (
-                  <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-[#cba6f7]" />
+                  <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-[#f59e0b]" />
                 )}
-                <span className="flex-shrink-0 font-mono text-xs text-[#cba6f7]">{icon}</span>
+                <span className="flex-shrink-0 font-mono text-xs text-[#f59e0b]">{icon}</span>
                 {!sidebarCollapsed && <span className="text-xs font-medium">{label}</span>}
               </button>
             ))}
@@ -495,30 +495,30 @@ export default function Home() {
 
           {/* Create program + sign out */}
           {!sidebarCollapsed && (
-            <div className="border-t border-[#313244] px-3 py-4 space-y-2">
-              <p className="text-[9px] font-semibold uppercase tracking-widest text-[#6c7086]">New Program</p>
+            <div className="border-t border-[#2e2e2e] px-3 py-4 space-y-2">
+              <p className="text-[9px] font-semibold uppercase tracking-widest text-[#52525b]">New Program</p>
               <input
-                className="w-full rounded-md border border-[#313244] bg-[#1e1e2e] px-2.5 py-1.5 text-xs text-[#cdd6f4] placeholder-[#45475a] transition focus:border-[#cba6f7] focus:outline-none"
+                className="w-full rounded-md border border-[#2e2e2e] bg-[#161616] px-2.5 py-1.5 text-xs text-[#f1f5f9] placeholder-[#3a3a3a] transition focus:border-[#f59e0b] focus:outline-none"
                 placeholder="Program name"
                 value={newProgram.name}
                 onChange={(e) => setNewProgram({ ...newProgram, name: e.target.value })}
               />
               <input
-                className="w-full rounded-md border border-[#313244] bg-[#1e1e2e] px-2.5 py-1.5 text-xs text-[#cdd6f4] placeholder-[#45475a] transition focus:border-[#cba6f7] focus:outline-none"
+                className="w-full rounded-md border border-[#2e2e2e] bg-[#161616] px-2.5 py-1.5 text-xs text-[#f1f5f9] placeholder-[#3a3a3a] transition focus:border-[#f59e0b] focus:outline-none"
                 placeholder="Platform"
                 value={newProgram.platform}
                 onChange={(e) => setNewProgram({ ...newProgram, platform: e.target.value })}
               />
               <input
-                className="w-full rounded-md border border-[#313244] bg-[#1e1e2e] px-2.5 py-1.5 text-xs text-[#cdd6f4] placeholder-[#45475a] transition focus:border-[#cba6f7] focus:outline-none"
+                className="w-full rounded-md border border-[#2e2e2e] bg-[#161616] px-2.5 py-1.5 text-xs text-[#f1f5f9] placeholder-[#3a3a3a] transition focus:border-[#f59e0b] focus:outline-none"
                 placeholder="Program URL"
                 value={newProgram.program_url}
                 onChange={(e) => setNewProgram({ ...newProgram, program_url: e.target.value })}
               />
-              <button onClick={createProgram} disabled={loading} className="w-full rounded-md bg-[#cba6f7] px-3 py-1.5 text-xs font-semibold text-[#1e1e2e] transition hover:bg-[#d0b4fa] active:scale-[0.98] disabled:opacity-50">
+              <button onClick={createProgram} disabled={loading} className="w-full rounded-md bg-[#f59e0b] px-3 py-1.5 text-xs font-semibold text-[#161616] transition hover:bg-[#fbbf24] active:scale-[0.98] disabled:opacity-50">
                 {loading ? "Working…" : "Create Program"}
               </button>
-              <button onClick={() => signOut({ callbackUrl: "/" })} className="w-full rounded-md border border-[#313244] px-3 py-1.5 text-xs text-[#6c7086] transition hover:border-[#45475a] hover:text-[#bac2de]">
+              <button onClick={() => signOut({ callbackUrl: "/" })} className="w-full rounded-md border border-[#2e2e2e] px-3 py-1.5 text-xs text-[#52525b] transition hover:border-[#3a3a3a] hover:text-[#94a3b8]">
                 Sign out
               </button>
             </div>
@@ -541,8 +541,8 @@ export default function Home() {
           )}
 
           {!selectedProgram && (
-            <div className="rounded-2xl border border-dashed border-[#313244] p-14 text-center">
-              <p className="text-sm text-[#45475a]">Create or select a program to begin.</p>
+            <div className="rounded-2xl border border-dashed border-[#2e2e2e] p-14 text-center">
+              <p className="text-sm text-[#3a3a3a]">Create or select a program to begin.</p>
             </div>
           )}
 
@@ -551,7 +551,7 @@ export default function Home() {
             <div className="space-y-7">
               <SectionHeader title={selectedProgram.name} description="Select a program, confirm scope, import tool output, review recon, validate findings, and draft a report." />
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                <DashboardCard title="In-Scope Assets" value={workflowCounts.inScope} accent="#cba6f7" />
+                <DashboardCard title="In-Scope Assets" value={workflowCounts.inScope} accent="#f59e0b" />
                 <DashboardCard title="Recon Entries" value={workflowCounts.recon} accent="#89b4fa" />
                 <DashboardCard title="Scan Results" value={workflowCounts.scans} accent="#f38ba8" />
                 <DashboardCard title="Manual Tests" value={workflowCounts.manual} accent="#fab387" />
@@ -568,13 +568,13 @@ export default function Home() {
                 </Panel>
                 <Panel title="Imports Summary">
                   {selectedProgram.imports.length === 0 ? (
-                    <p className="text-sm text-[#45475a]">No imports yet.</p>
+                    <p className="text-sm text-[#3a3a3a]">No imports yet.</p>
                   ) : (
                     <div className="space-y-2">
                       {selectedProgram.imports.map((item) => (
-                        <div key={item.id} className="flex items-center justify-between rounded-lg border border-[#313244] bg-[#1e1e2e] px-4 py-3">
-                          <span className="font-mono text-xs font-semibold text-[#cba6f7] uppercase">{item.tool_type}</span>
-                          <span className="text-xs text-[#6c7086]">{item.imported_count} records</span>
+                        <div key={item.id} className="flex items-center justify-between rounded-lg border border-[#2e2e2e] bg-[#161616] px-4 py-3">
+                          <span className="font-mono text-xs font-semibold text-[#f59e0b] uppercase">{item.tool_type}</span>
+                          <span className="text-xs text-[#52525b]">{item.imported_count} records</span>
                         </div>
                       ))}
                     </div>
@@ -649,26 +649,26 @@ export default function Home() {
               <Panel title="Import Tool Output">
                 <div className="grid gap-4 md:grid-cols-3">
                   <div>
-                    <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-[#6c7086]">Tool Type</label>
-                    <select className="w-full rounded-md border border-[#313244] bg-[#1e1e2e] px-2.5 py-2 text-sm text-[#cdd6f4] transition focus:border-[#cba6f7] focus:outline-none" value={toolType} onChange={(e) => setToolType(e.target.value)}>
+                    <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-[#52525b]">Tool Type</label>
+                    <select className="w-full rounded-md border border-[#2e2e2e] bg-[#161616] px-2.5 py-2 text-sm text-[#f1f5f9] transition focus:border-[#f59e0b] focus:outline-none" value={toolType} onChange={(e) => setToolType(e.target.value)}>
                       <option value="ffuf">ffuf</option>
                       <option value="httpx">httpx</option>
                       <option value="nuclei">nuclei</option>
                     </select>
                   </div>
                   <div className="md:col-span-2">
-                    <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-[#6c7086]">JSON / JSONL File</label>
+                    <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-[#52525b]">JSON / JSONL File</label>
                     <input type="file" accept=".json,.jsonl,application/json,application/x-ndjson" onChange={(e) => setImportFile(e.target.files?.[0] || null)}
-                      className="w-full rounded-md border border-[#313244] bg-[#1e1e2e] px-2.5 py-2 text-sm text-[#6c7086] file:mr-3 file:rounded file:border-0 file:bg-[#313244] file:px-2.5 file:py-1 file:text-xs file:font-semibold file:text-[#cdd6f4]" />
+                      className="w-full rounded-md border border-[#2e2e2e] bg-[#161616] px-2.5 py-2 text-sm text-[#52525b] file:mr-3 file:rounded file:border-0 file:bg-[#2e2e2e] file:px-2.5 file:py-1 file:text-xs file:font-semibold file:text-[#f1f5f9]" />
                   </div>
                 </div>
                 <div className="mt-5"><PrimaryButton onClick={handleImport} label={loading ? "Importing…" : "Import Results"} /></div>
-                <div className="mt-6 rounded-xl border border-[#313244] bg-[#1e1e2e] p-4">
-                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-[#6c7086]">Supported imports</p>
-                  <div className="space-y-1 text-xs text-[#6c7086]">
-                    <p><span className="font-mono text-[#cba6f7]">ffuf</span> — Recon endpoints and paths</p>
-                    <p><span className="font-mono text-[#cba6f7]">httpx</span> — Live hosts, titles, technologies</p>
-                    <p><span className="font-mono text-[#cba6f7]">nuclei</span> — Candidate scan findings</p>
+                <div className="mt-6 rounded-xl border border-[#2e2e2e] bg-[#161616] p-4">
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-[#52525b]">Supported imports</p>
+                  <div className="space-y-1 text-xs text-[#52525b]">
+                    <p><span className="font-mono text-[#f59e0b]">ffuf</span> — Recon endpoints and paths</p>
+                    <p><span className="font-mono text-[#f59e0b]">httpx</span> — Live hosts, titles, technologies</p>
+                    <p><span className="font-mono text-[#f59e0b]">nuclei</span> — Candidate scan findings</p>
                   </div>
                 </div>
               </Panel>
@@ -682,24 +682,24 @@ export default function Home() {
               <div className="grid gap-5 xl:grid-cols-2">
                 <Panel title="Discovered Assets">
                   {(selectedProgram.recon ?? []).length === 0 ? (
-                    <p className="text-sm text-[#45475a]">No recon data imported yet.</p>
+                    <p className="text-sm text-[#3a3a3a]">No recon data imported yet.</p>
                   ) : (
                     <div className="overflow-x-auto">
                       <table className="min-w-full text-xs">
                         <thead>
-                          <tr className="border-b border-[#313244]">
+                          <tr className="border-b border-[#2e2e2e]">
                             {["Source","URL / Host","Path / Title","Status"].map((h) => (
-                              <th key={h} className="pb-2.5 pr-4 text-left text-[9px] font-semibold uppercase tracking-widest text-[#6c7086]">{h}</th>
+                              <th key={h} className="pb-2.5 pr-4 text-left text-[9px] font-semibold uppercase tracking-widest text-[#52525b]">{h}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
                           {(selectedProgram.recon ?? []).map((item, i) => (
-                            <tr key={item.id} className={`border-b border-[#1e1e2e] ${i % 2 === 0 ? "" : "bg-[#181825]/40"}`}>
-                              <td className="py-2.5 pr-4 font-mono text-[#6c7086]">{item.source}</td>
-                              <td className="py-2.5 pr-4 max-w-[180px] truncate text-[#cdd6f4]">{item.url || item.host || "—"}</td>
-                              <td className="py-2.5 pr-4 max-w-[160px] truncate text-[#908caa]">{item.path || item.title || "—"}</td>
-                              <td className="py-2.5 font-mono text-[#6c7086]">{item.status_code || "—"}</td>
+                            <tr key={item.id} className={`border-b border-[#161616] ${i % 2 === 0 ? "" : "bg-[#1a1a1a]/40"}`}>
+                              <td className="py-2.5 pr-4 font-mono text-[#52525b]">{item.source}</td>
+                              <td className="py-2.5 pr-4 max-w-[180px] truncate text-[#f1f5f9]">{item.url || item.host || "—"}</td>
+                              <td className="py-2.5 pr-4 max-w-[160px] truncate text-[#6b7280]">{item.path || item.title || "—"}</td>
+                              <td className="py-2.5 font-mono text-[#52525b]">{item.status_code || "—"}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -710,12 +710,12 @@ export default function Home() {
                 <Panel title="Technology / Metadata">
                   <div className="space-y-2">
                     {(selectedProgram.recon ?? []).map((item) => (
-                      <div key={item.id} className="rounded-lg border border-[#313244] bg-[#1e1e2e] px-4 py-3">
-                        <div className="text-sm font-medium text-[#cdd6f4]">{item.url || item.host || "Unknown"}</div>
-                        <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-[#6c7086]">
-                          <span>Server: <span className="text-[#908caa]">{item.webserver || "—"}</span></span>
-                          <span>Tech: <span className="text-[#908caa]">{Array.isArray(item.tech) ? item.tech.join(", ") || "—" : "—"}</span></span>
-                          <span>L/W/Li: <span className="font-mono text-[#908caa]">{item.length || 0}/{item.words || 0}/{item.lines || 0}</span></span>
+                      <div key={item.id} className="rounded-lg border border-[#2e2e2e] bg-[#161616] px-4 py-3">
+                        <div className="text-sm font-medium text-[#f1f5f9]">{item.url || item.host || "Unknown"}</div>
+                        <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-[#52525b]">
+                          <span>Server: <span className="text-[#6b7280]">{item.webserver || "—"}</span></span>
+                          <span>Tech: <span className="text-[#6b7280]">{Array.isArray(item.tech) ? item.tech.join(", ") || "—" : "—"}</span></span>
+                          <span>L/W/Li: <span className="font-mono text-[#6b7280]">{item.length || 0}/{item.words || 0}/{item.lines || 0}</span></span>
                         </div>
                       </div>
                     ))}
@@ -731,24 +731,24 @@ export default function Home() {
               <SectionHeader title="Scanning" description="Review candidate vulnerabilities from imported scan results." />
               <Panel title="Nuclei Candidates">
                 {(selectedProgram.scans ?? []).length === 0 ? (
-                  <p className="text-sm text-[#45475a]">No scan results imported yet.</p>
+                  <p className="text-sm text-[#3a3a3a]">No scan results imported yet.</p>
                 ) : (
                   <div className="space-y-3">
                     {(selectedProgram.scans ?? []).map((scan) => (
-                      <div key={scan.id} className="rounded-xl border border-[#313244] bg-[#1e1e2e] p-4">
+                      <div key={scan.id} className="rounded-xl border border-[#2e2e2e] bg-[#161616] p-4">
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <div className="font-semibold text-[#cdd6f4]">{scan.title}</div>
-                            <div className="mt-1 font-mono text-xs text-[#6c7086]">{scan.asset || "Unknown"} · {scan.template_id}</div>
+                            <div className="font-semibold text-[#f1f5f9]">{scan.title}</div>
+                            <div className="mt-1 font-mono text-xs text-[#52525b]">{scan.asset || "Unknown"} · {scan.template_id}</div>
                           </div>
                           <div className="flex flex-shrink-0 items-center gap-2">
                             <SeverityBadge severity={scan.severity} />
-                            <button onClick={() => promoteScanToFinding(scan)} className="rounded-md border border-[#313244] bg-[#26263a] px-3 py-1.5 text-xs font-semibold text-[#cba6f7] transition hover:border-[#cba6f7]/30 hover:bg-[#313244]">
+                            <button onClick={() => promoteScanToFinding(scan)} className="rounded-md border border-[#2e2e2e] bg-[#242424] px-3 py-1.5 text-xs font-semibold text-[#f59e0b] transition hover:border-[#f59e0b]/30 hover:bg-[#2e2e2e]">
                               Promote →
                             </button>
                           </div>
                         </div>
-                        {scan.description && <p className="mt-3 text-sm text-[#908caa]">{scan.description}</p>}
+                        {scan.description && <p className="mt-3 text-sm text-[#6b7280]">{scan.description}</p>}
                       </div>
                     ))}
                   </div>
@@ -774,21 +774,21 @@ export default function Home() {
                 </Panel>
                 <Panel title="Saved Manual Tests">
                   {(selectedProgram.manual_tests ?? []).length === 0 ? (
-                    <p className="text-sm text-[#45475a]">No manual tests saved yet.</p>
+                    <p className="text-sm text-[#3a3a3a]">No manual tests saved yet.</p>
                   ) : (
                     <div className="space-y-3">
                       {(selectedProgram.manual_tests ?? []).map((test) => (
-                        <div key={test.id} className="rounded-xl border border-[#313244] bg-[#1e1e2e] p-4">
+                        <div key={test.id} className="rounded-xl border border-[#2e2e2e] bg-[#161616] p-4">
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              <div className="font-semibold text-[#cdd6f4]">{test.title}</div>
+                              <div className="font-semibold text-[#f1f5f9]">{test.title}</div>
                               <div className="mt-1"><StatusBadge status={test.status} /></div>
                             </div>
                             <DangerButton onClick={() => deleteManualTest(test.id)} label="Delete" small />
                           </div>
-                          {test.hypothesis && <p className="mt-3 text-sm text-[#908caa]">{test.hypothesis}</p>}
-                          {test.payload && <p className="mt-2 font-mono text-xs text-[#6c7086]">Payload: {test.payload}</p>}
-                          {test.evidence && <p className="mt-1 text-xs text-[#6c7086]">Evidence: {test.evidence}</p>}
+                          {test.hypothesis && <p className="mt-3 text-sm text-[#6b7280]">{test.hypothesis}</p>}
+                          {test.payload && <p className="mt-2 font-mono text-xs text-[#52525b]">Payload: {test.payload}</p>}
+                          {test.evidence && <p className="mt-1 text-xs text-[#52525b]">Evidence: {test.evidence}</p>}
                         </div>
                       ))}
                     </div>
@@ -820,24 +820,24 @@ export default function Home() {
                 </Panel>
                 <Panel title="Finding Tracker">
                   {(selectedProgram.findings ?? []).length === 0 ? (
-                    <p className="text-sm text-[#45475a]">No findings yet.</p>
+                    <p className="text-sm text-[#3a3a3a]">No findings yet.</p>
                   ) : (
                     <div className="space-y-3">
                       {(selectedProgram.findings ?? []).map((finding) => (
-                        <div key={finding.id} className="rounded-xl border border-[#313244] bg-[#1e1e2e] p-4">
+                        <div key={finding.id} className="rounded-xl border border-[#2e2e2e] bg-[#161616] p-4">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <div className="font-semibold text-[#cdd6f4]">{finding.title}</div>
+                              <div className="font-semibold text-[#f1f5f9]">{finding.title}</div>
                               <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                                 <SeverityBadge severity={finding.severity} />
                                 <StatusBadge status={finding.status} />
-                                {finding.asset && <span className="font-mono text-xs text-[#6c7086]">{finding.asset}</span>}
+                                {finding.asset && <span className="font-mono text-xs text-[#52525b]">{finding.asset}</span>}
                               </div>
                               {/* Stage 3: Backlinks */}
                               {backlinkMap[finding.id]?.length > 0 && (
                                 <div className="mt-2 flex flex-wrap gap-1">
                                   {backlinkMap[finding.id].map((scan) => (
-                                    <span key={scan.id} className="inline-flex items-center gap-1 rounded border border-[#cba6f7]/20 bg-[#cba6f7]/5 px-1.5 py-0.5 font-mono text-[9px] text-[#cba6f7]">
+                                    <span key={scan.id} className="inline-flex items-center gap-1 rounded border border-[#f59e0b]/20 bg-[#f59e0b]/5 px-1.5 py-0.5 font-mono text-[9px] text-[#f59e0b]">
                                       ↖ {scan.template_id || scan.title}
                                     </span>
                                   ))}
@@ -846,7 +846,7 @@ export default function Home() {
                             </div>
                             <DangerButton onClick={() => deleteFinding(finding.id)} label="Delete" small />
                           </div>
-                          {finding.summary && <p className="mt-3 text-sm text-[#908caa]">{finding.summary}</p>}
+                          {finding.summary && <p className="mt-3 text-sm text-[#6b7280]">{finding.summary}</p>}
                         </div>
                       ))}
                     </div>
@@ -864,9 +864,9 @@ export default function Home() {
                 <Panel title="Draft Report">
                   <div className="grid gap-3">
                     <div>
-                      <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-[#6c7086]">Link Finding</label>
+                      <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-[#52525b]">Link Finding</label>
                       <select
-                        className="w-full rounded-md border border-[#313244] bg-[#1e1e2e] px-2.5 py-2 text-sm text-[#cdd6f4] transition focus:border-[#cba6f7] focus:outline-none"
+                        className="w-full rounded-md border border-[#2e2e2e] bg-[#161616] px-2.5 py-2 text-sm text-[#f1f5f9] transition focus:border-[#f59e0b] focus:outline-none"
                         value={reportForm.finding_id}
                         onChange={(e) => {
                           const fid = e.target.value;
@@ -891,18 +891,18 @@ export default function Home() {
                   </div>
                 </Panel>
                 <Panel title="Report Preview">
-                  <pre className="whitespace-pre-wrap rounded-lg border border-[#313244] bg-[#1e1e2e] p-4 font-mono text-xs leading-relaxed text-[#908caa]">
+                  <pre className="whitespace-pre-wrap rounded-lg border border-[#2e2e2e] bg-[#161616] p-4 font-mono text-xs leading-relaxed text-[#6b7280]">
                     {generateReportPreview()}
                   </pre>
                   <div className="mt-5 space-y-2">
                     {(selectedProgram.reports ?? []).map((report) => (
-                      <div key={report.id} className="flex items-start justify-between gap-3 rounded-xl border border-[#313244] bg-[#1e1e2e] px-4 py-3">
+                      <div key={report.id} className="flex items-start justify-between gap-3 rounded-xl border border-[#2e2e2e] bg-[#161616] px-4 py-3">
                         <div>
-                          <div className="font-semibold text-[#cdd6f4]">{report.title}</div>
+                          <div className="font-semibold text-[#f1f5f9]">{report.title}</div>
                           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                             <StatusBadge status={report.status} />
-                            {report.cwe && <span className="font-mono text-xs text-[#6c7086]">CWE: {report.cwe}</span>}
-                            {report.cvss && <span className="font-mono text-xs text-[#6c7086]">CVSS: {report.cvss}</span>}
+                            {report.cwe && <span className="font-mono text-xs text-[#52525b]">CWE: {report.cwe}</span>}
+                            {report.cvss && <span className="font-mono text-xs text-[#52525b]">CVSS: {report.cvss}</span>}
                           </div>
                         </div>
                         <DangerButton onClick={() => deleteReport(report.id)} label="Delete" small />
@@ -925,8 +925,8 @@ export default function Home() {
 
 function DashboardCard({ title, value, accent }: { title: string; value: number; accent: string }) {
   return (
-    <div className="rounded-xl border border-[#313244] bg-[#181825] p-5 transition hover:border-[#45475a]">
-      <div className="text-[9px] font-semibold uppercase tracking-widest text-[#6c7086]">{title}</div>
+    <div className="rounded-xl border border-[#2e2e2e] bg-[#1a1a1a] p-5 transition hover:border-[#3a3a3a]">
+      <div className="text-[9px] font-semibold uppercase tracking-widest text-[#52525b]">{title}</div>
       <div className="mt-3 font-mono text-4xl font-bold tracking-tight" style={{ color: accent }}>{value}</div>
     </div>
   );
@@ -934,8 +934,8 @@ function DashboardCard({ title, value, accent }: { title: string; value: number;
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-[#313244] bg-[#181825] p-5">
-      <h3 className="mb-5 text-[10px] font-semibold uppercase tracking-widest text-[#6c7086]">{title}</h3>
+    <div className="rounded-xl border border-[#2e2e2e] bg-[#1a1a1a] p-5">
+      <h3 className="mb-5 text-[10px] font-semibold uppercase tracking-widest text-[#52525b]">{title}</h3>
       {children}
     </div>
   );
@@ -943,9 +943,9 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 
 function SectionHeader({ title, description }: { title: string; description: string }) {
   return (
-    <div className="border-b border-[#313244] pb-5">
-      <h2 className="text-2xl font-bold tracking-tight text-[#cdd6f4]">{title}</h2>
-      <p className="mt-1.5 text-sm text-[#6c7086]">{description}</p>
+    <div className="border-b border-[#2e2e2e] pb-5">
+      <h2 className="text-2xl font-bold tracking-tight text-[#f1f5f9]">{title}</h2>
+      <p className="mt-1.5 text-sm text-[#52525b]">{description}</p>
     </div>
   );
 }
@@ -953,9 +953,9 @@ function SectionHeader({ title, description }: { title: string; description: str
 function Input({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <div>
-      <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-[#6c7086]">{label}</label>
+      <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-[#52525b]">{label}</label>
       <input
-        className="w-full rounded-md border border-[#313244] bg-[#1e1e2e] px-3 py-2 text-sm text-[#cdd6f4] placeholder-[#45475a] transition focus:border-[#cba6f7] focus:outline-none"
+        className="w-full rounded-md border border-[#2e2e2e] bg-[#161616] px-3 py-2 text-sm text-[#f1f5f9] placeholder-[#3a3a3a] transition focus:border-[#f59e0b] focus:outline-none"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
@@ -968,11 +968,11 @@ function Textarea({ label, value, onChange }: { label: string; value: string; on
   return (
     <div>
       <div className="mb-1.5 flex items-center justify-between">
-        <label className="text-[10px] font-semibold uppercase tracking-widest text-[#6c7086]">{label}</label>
-        <div className="flex rounded border border-[#313244] bg-[#1e1e2e] p-0.5">
+        <label className="text-[10px] font-semibold uppercase tracking-widest text-[#52525b]">{label}</label>
+        <div className="flex rounded border border-[#2e2e2e] bg-[#161616] p-0.5">
           {(["edit", "preview"] as const).map((m) => (
             <button key={m} onClick={() => setMode(m)}
-              className={`rounded px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider transition ${mode === m ? "bg-[#313244] text-[#cdd6f4]" : "text-[#6c7086] hover:text-[#908caa]"}`}>
+              className={`rounded px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider transition ${mode === m ? "bg-[#2e2e2e] text-[#f1f5f9]" : "text-[#52525b] hover:text-[#6b7280]"}`}>
               {m}
             </button>
           ))}
@@ -980,28 +980,28 @@ function Textarea({ label, value, onChange }: { label: string; value: string; on
       </div>
       {mode === "edit" && (
         <textarea rows={4} placeholder="Supports markdown…"
-          className="w-full rounded-md border border-[#313244] bg-[#1e1e2e] px-3 py-2 font-mono text-sm text-[#cdd6f4] placeholder-[#45475a] transition focus:border-[#cba6f7] focus:outline-none"
+          className="w-full rounded-md border border-[#2e2e2e] bg-[#161616] px-3 py-2 font-mono text-sm text-[#f1f5f9] placeholder-[#3a3a3a] transition focus:border-[#f59e0b] focus:outline-none"
           value={value} onChange={(e) => onChange(e.target.value)} />
       )}
       {mode === "preview" && (
-        <div className="min-h-[104px] w-full rounded-md border border-[#313244] bg-[#1e1e2e] px-3 py-2">
+        <div className="min-h-[104px] w-full rounded-md border border-[#2e2e2e] bg-[#161616] px-3 py-2">
           {value.trim() ? (
-            <div className="text-sm text-[#908caa] leading-relaxed space-y-2
-              [&_h1]:text-lg [&_h1]:font-semibold [&_h1]:text-[#cdd6f4]
-              [&_h2]:text-base [&_h2]:font-semibold [&_h2]:text-[#cdd6f4]
-              [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:text-[#bac2de]
-              [&_strong]:text-[#cdd6f4]
+            <div className="text-sm text-[#6b7280] leading-relaxed space-y-2
+              [&_h1]:text-lg [&_h1]:font-semibold [&_h1]:text-[#f1f5f9]
+              [&_h2]:text-base [&_h2]:font-semibold [&_h2]:text-[#f1f5f9]
+              [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:text-[#94a3b8]
+              [&_strong]:text-[#f1f5f9]
               [&_a]:text-[#89b4fa] [&_a]:no-underline hover:[&_a]:underline
-              [&_code]:rounded [&_code]:bg-[#313244] [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs [&_code]:text-[#a6e3a1] [&_code]:font-mono
-              [&_pre]:rounded-md [&_pre]:border [&_pre]:border-[#313244] [&_pre]:bg-[#1e1e2e] [&_pre]:p-3 [&_pre]:text-xs
+              [&_code]:rounded [&_code]:bg-[#2e2e2e] [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs [&_code]:text-[#a6e3a1] [&_code]:font-mono
+              [&_pre]:rounded-md [&_pre]:border [&_pre]:border-[#2e2e2e] [&_pre]:bg-[#161616] [&_pre]:p-3 [&_pre]:text-xs
               [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4
-              [&_li]:text-[#908caa]
-              [&_blockquote]:border-l-2 [&_blockquote]:border-[#cba6f7]/30 [&_blockquote]:pl-3 [&_blockquote]:text-[#6c7086]
-              [&_hr]:border-[#313244]">
+              [&_li]:text-[#6b7280]
+              [&_blockquote]:border-l-2 [&_blockquote]:border-[#f59e0b]/30 [&_blockquote]:pl-3 [&_blockquote]:text-[#52525b]
+              [&_hr]:border-[#2e2e2e]">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{value}</ReactMarkdown>
             </div>
           ) : (
-            <p className="text-xs text-[#45475a] italic">Nothing to preview.</p>
+            <p className="text-xs text-[#3a3a3a] italic">Nothing to preview.</p>
           )}
         </div>
       )}
@@ -1012,18 +1012,18 @@ function Textarea({ label, value, onChange }: { label: string; value: string; on
 function KeyValue({ label, value }: { label: string; value: string }) {
   return (
     <div className="mb-4 last:mb-0">
-      <div className="text-[9px] font-semibold uppercase tracking-widest text-[#6c7086]">{label}</div>
-      <div className="mt-1 text-sm text-[#bac2de]">{value}</div>
+      <div className="text-[9px] font-semibold uppercase tracking-widest text-[#52525b]">{label}</div>
+      <div className="mt-1 text-sm text-[#94a3b8]">{value}</div>
     </div>
   );
 }
 
 function ListCard({ title, subtitle, onDelete }: { title: string; subtitle: string; onDelete: () => void }) {
   return (
-    <div className="flex items-start justify-between gap-3 rounded-lg border border-[#313244] bg-[#1e1e2e] px-4 py-3">
+    <div className="flex items-start justify-between gap-3 rounded-lg border border-[#2e2e2e] bg-[#161616] px-4 py-3">
       <div className="min-w-0">
-        <div className="truncate text-sm font-medium text-[#cdd6f4]">{title}</div>
-        <div className="mt-0.5 truncate text-xs text-[#6c7086]">{subtitle}</div>
+        <div className="truncate text-sm font-medium text-[#f1f5f9]">{title}</div>
+        <div className="mt-0.5 truncate text-xs text-[#52525b]">{subtitle}</div>
       </div>
       <DangerButton onClick={onDelete} label="Delete" small />
     </div>
@@ -1032,7 +1032,7 @@ function ListCard({ title, subtitle, onDelete }: { title: string; subtitle: stri
 
 function PrimaryButton({ onClick, label }: { onClick: () => void; label: string }) {
   return (
-    <button onClick={onClick} className="rounded-md bg-[#cba6f7] px-4 py-2 text-sm font-semibold text-[#1e1e2e] transition hover:bg-[#d0b4fa] active:scale-[0.98]">
+    <button onClick={onClick} className="rounded-md bg-[#f59e0b] px-4 py-2 text-sm font-semibold text-[#161616] transition hover:bg-[#fbbf24] active:scale-[0.98]">
       {label}
     </button>
   );
